@@ -36,4 +36,7 @@ export const api = {
 
   // ---- evaluation ----
   evalLatest: () => request('/api/evaluation/latest'),
+
+  // ---- analytics ----
+  get: (path) => request(path),
 }

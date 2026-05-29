@@ -1,196 +1,272 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Send, PanelRightClose, PanelRightOpen } from 'lucide-react'
-import clsx from 'clsx'
+import { Send, X, Loader2, ThumbsUp, ThumbsDown, Zap } from 'lucide-react'
+import { useChatContext } from '../context/ChatContext.jsx'
 import { api } from '../api/client.js'
-import Message from '../components/Message.jsx'
-import DocsDrawer from '../components/DocsDrawer.jsx'
-import FlowViz from '../components/flow/FlowViz.jsx'
-import { useFlowState } from '../hooks/useFlowState.js'
 
-function uid() { return Math.random().toString(36).slice(2, 10) }
+/* ── All possible pipeline steps (ordered) ─────────────────── */
+const ALL_STEPS = [
+  { id: 'guard_in',       label: 'Input Guardrails',        detail: 'Injection · domain check · toxic filter' },
+  { id: 'compress',       label: 'Prompt Compression',      detail: 'Token trimming' },
+  { id: 'cache',          label: 'Cache Lookup',            detail: 'Semantic (cosine ≥ 0.92) + keyword LRU' },
+  { id: 'orchestrator',   label: 'Orchestrator',            detail: 'Intent + severity routing (Groq llama-3.1-8b)' },
+  { id: 'supplier_risk',  label: 'Supplier Risk Agent',     detail: 'Historical supplier incidents' },
+  { id: 'shipment',       label: 'Shipment Analysis Agent', detail: 'Delay patterns · mode analysis' },
+  { id: 'inventory',      label: 'Inventory Intelligence',  detail: 'Stock anomalies · demand spikes' },
+  { id: 'retrieval',      label: 'Hybrid Retrieval',        detail: 'ChromaDB dense + BM25 sparse → RRF fusion' },
+  { id: 'rerank',         label: 'Rerank + CRAG',           detail: 'Cosine rerank · retry if score < 0.6' },
+  { id: 'recommendation', label: 'Recommendation',          detail: 'Mitigation synthesis (gpt-4o-mini)' },
+  { id: 'guard_out',      label: 'Output Guardrails',       detail: 'Faithfulness · hallucination filter' },
+  { id: 'hilt',           label: 'HILT / Feedback',         detail: 'HIGH severity → human review · SQLite' },
+]
 
+/* ── Process Modal — only triggered steps ──────────────────── */
+function ProcessModal({ nodeStatus, timeline, onClose }) {
+  // Only show steps that have been touched (not pending)
+  const triggered = ALL_STEPS.filter((s) => nodeStatus[s.id] && nodeStatus[s.id] !== 'pending')
+
+  const dotColor = (s) => ({
+    done:    'bg-green-500',
+    active:  'bg-blue-500 animate-pulse',
+    error:   'bg-red-500',
+    skipped: 'bg-yellow-400',
+  }[s] || 'bg-gray-200')
+
+  const labelColor = (s) => ({
+    done:    'text-green-700',
+    active:  'text-blue-600',
+    error:   'text-red-600',
+    skipped: 'text-yellow-600',
+  }[s] || 'text-gray-500')
+
+  const badge = (s) => ({
+    done:    { text: 'done',    cls: 'bg-green-100 text-green-700' },
+    active:  { text: 'running', cls: 'bg-blue-100 text-blue-700' },
+    error:   { text: 'blocked', cls: 'bg-red-100 text-red-700' },
+    skipped: { text: 'skipped', cls: 'bg-yellow-100 text-yellow-700' },
+  }[s])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+          <div>
+            <h2 className="font-semibold text-gray-900">Pipeline Process</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Showing triggered steps only</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X size={18} /></button>
+        </div>
+
+        {/* Steps */}
+        <div className="overflow-y-auto px-6 py-4 flex-1">
+          {triggered.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-sm text-gray-400">No steps triggered yet.</p>
+              <p className="text-xs text-gray-300 mt-1">Send a message to see the pipeline run.</p>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {triggered.map((step, i) => {
+                const s = nodeStatus[step.id]
+                const b = badge(s)
+                return (
+                  <div key={step.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${dotColor(s)}`} />
+                      {i < triggered.length - 1 && (
+                        <div className="w-0.5 flex-1 my-1 bg-gray-200" />
+                      )}
+                    </div>
+                    <div className="pb-3 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-sm font-medium ${labelColor(s)}`}>{step.label}</span>
+                        {b && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>
+                            {b.text}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{step.detail}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Timeline footer — only if there are events */}
+        {timeline.length > 0 && (
+          <div className="border-t px-6 py-3 flex-shrink-0 bg-gray-50 rounded-b-2xl">
+            <p className="text-xs font-medium text-gray-500 mb-2">Timeline</p>
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {timeline.map((t, i) => (
+                <div key={i} className={`text-xs px-2 py-1 rounded ${
+                  t.type === 'error'  ? 'bg-red-50 text-red-600' :
+                  t.type === 'retry'  ? 'bg-yellow-50 text-yellow-700' :
+                  t.type === 'cache'  ? 'bg-green-50 text-green-700' :
+                  t.type === 'done'   ? 'bg-green-50 text-green-700' :
+                  'bg-white text-gray-500 border border-gray-100'
+                }`}>{t.label}</div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Message bubble ────────────────────────────────────────── */
+function Message({ msg, onFeedback }) {
+  const isUser = msg.role === 'user'
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+      {!isUser && (
+        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">AI</div>
+      )}
+      <div className="max-w-[75%]">
+        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+          isUser
+            ? 'bg-indigo-600 text-white rounded-br-sm'
+            : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
+        }`}>
+          {msg.streaming
+            ? <span className="flex items-center gap-2 text-gray-400"><Loader2 size={14} className="animate-spin" />{msg.content || 'Processing…'}</span>
+            : msg.content}
+          {msg.cached && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">cached ⚡</span>}
+        </div>
+        {!isUser && !msg.streaming && (
+          <div className="flex items-center gap-2 mt-1 px-1">
+            {msg.severity && msg.severity !== 'LOW' && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${msg.severity === 'HIGH' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {msg.severity}
+              </span>
+            )}
+            {msg.needs_human && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Needs review</span>}
+            <button onClick={() => onFeedback(msg.id, 'up')} className="text-gray-300 hover:text-green-500 ml-auto"><ThumbsUp size={13} /></button>
+            <button onClick={() => onFeedback(msg.id, 'down')} className="text-gray-300 hover:text-red-400"><ThumbsDown size={13} /></button>
+          </div>
+        )}
+      </div>
+      {isUser && (
+        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-bold ml-2 flex-shrink-0 mt-1">U</div>
+      )}
+    </div>
+  )
+}
+
+/* ── Main Chat ─────────────────────────────────────────────── */
 export default function Chat() {
-  const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [drawer, setDrawer] = useState({ open: false, docs: [] })
-  const [showFlow, setShowFlow] = useState(true)
-  const [sessionId] = useState(() => uid())
-  const wsRef = useRef(null)
+  const { messages, sending, liveStatus, sessionId, nodeStatus, timeline, send } = useChatContext()
+  const [input,       setInput]       = useState('')
+  const [showModal,   setShowModal]   = useState(false)
+  const [suggestions, setSuggestions] = useState([])
+  const [showSug,     setShowSug]     = useState(false)
   const listRef = useRef(null)
-  const { flow, ingest, reset: resetFlow } = useFlowState()
+
+  // Derive unique past user queries
+  const history = [...new Set(messages.filter((m) => m.role === 'user').map((m) => m.content))]
+
+  // Filter suggestions on input change
+  useEffect(() => {
+    const q = input.trim().toLowerCase()
+    if (!q) { setSuggestions([]); return }
+    const matches = history.filter((h) => h.toLowerCase().includes(q) && h.toLowerCase() !== q)
+    setSuggestions(matches.slice(0, 4))
+  }, [input, messages])
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages])
 
-  // Single shared WS for the page
-  useEffect(() => {
-    const ws = api.openChatSocket()
-    wsRef.current = ws
-    ws.onmessage = (evt) => {
-      let data
-      try { data = JSON.parse(evt.data) } catch { return }
-      // Feed the flow reducer first
-      ingest(data)
+  const onFeedback = useCallback(async (msgId, rating) => {
+    try { await api.feedback({ session_id: sessionId, message_id: msgId, rating }) } catch {}
+  }, [sessionId])
 
-      if (data.type === 'final' || data.type === 'cached') {
-        setMessages((m) => {
-          const next = [...m]
-          for (let i = next.length - 1; i >= 0; i--) {
-            if (next[i].role === 'assistant' && next[i].streaming) {
-              next[i] = {
-                ...next[i], id: uid(), streaming: false,
-                content: data.answer || '',
-                severity: data.severity || 'LOW',
-                docs: data.docs || [],
-                needs_human: !!data.needs_human,
-                cached: data.type === 'cached',
-              }
-              break
-            }
-          }
-          return next
-        })
-        setSending(false)
-      } else if (data.type === 'node_update') {
-        setMessages((m) => {
-          const next = [...m]
-          for (let i = next.length - 1; i >= 0; i--) {
-            if (next[i].role === 'assistant' && next[i].streaming) {
-              next[i] = { ...next[i], content: `working… (${data.node})` }
-              break
-            }
-          }
-          return next
-        })
-      } else if (data.type === 'guard_block') {
-        setMessages((m) => {
-          const next = [...m]
-          for (let i = next.length - 1; i >= 0; i--) {
-            if (next[i].role === 'assistant' && next[i].streaming) {
-              next[i] = { ...next[i], streaming: false,
-                content: `Blocked by input guard: ${data.detail}`,
-                severity: data.severity || 'LOW' }
-              break
-            }
-          }
-          return next
-        })
-        setSending(false)
-      } else if (data.type === 'error') {
-        setMessages((m) => {
-          const next = [...m]
-          for (let i = next.length - 1; i >= 0; i--) {
-            if (next[i].role === 'assistant' && next[i].streaming) {
-              next[i] = { ...next[i], streaming: false, content: `Error: ${data.detail}` }
-              break
-            }
-          }
-          return next
-        })
-        setSending(false)
-      }
+  const acceptSuggestion = (s) => { setInput(s); setSuggestions([]); setShowSug(false) }
+
+  const handleKey = (e) => {
+    if (e.key === 'Tab' && suggestions.length > 0) {
+      e.preventDefault(); acceptSuggestion(suggestions[0]); return
     }
-    return () => { try { ws.close() } catch {} }
-  }, [ingest])
-
-  const send = useCallback(() => {
-    const q = input.trim()
-    if (!q || sending) return
-    resetFlow()
-    const userMsg = { id: uid(), role: 'user', content: q }
-    const placeholder = { id: uid(), role: 'assistant', content: '', streaming: true, docs: [] }
-    setMessages((m) => [...m, userMsg, placeholder])
-    setInput('')
-    setSending(true)
-    const ws = wsRef.current
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ query: q, session_id: sessionId }))
-    } else {
-      api.query({ query: q, session_id: sessionId })
-        .then((r) => {
-          setMessages((m) => {
-            const next = [...m]
-            for (let i = next.length - 1; i >= 0; i--) {
-              if (next[i].role === 'assistant' && next[i].streaming) {
-                next[i] = { ...next[i], streaming: false, content: r.answer, severity: r.severity, docs: r.docs, needs_human: r.needs_human }
-                break
-              }
-            }
-            return next
-          })
-        })
-        .catch((e) => setMessages((m) => [...m, { id: uid(), role: 'assistant', content: `Error: ${e.message}` }]))
-        .finally(() => setSending(false))
-    }
-  }, [input, sending, sessionId, resetFlow])
-
-  const onShowDocs = (msg) => setDrawer({ open: true, docs: msg.docs || [] })
-  const onFeedback = (msg, rating) => {
-    setMessages((m) => m.map((x) => x.id === msg.id ? { ...x, rating } : x))
-    api.feedback({ session_id: sessionId, message_id: msg.id, rating }).catch(() => {})
+    if (e.key === 'Escape') { setSuggestions([]); return }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setSuggestions([]); send(input); setInput('') }
   }
-  const onEscalate = (msg) => {
-    api.feedback({ session_id: sessionId, message_id: msg.id, rating: 'down', note: 'ESCALATE_TO_HUMAN' }).catch(() => {})
-    setMessages((m) => [...m, {
-      id: uid(), role: 'assistant',
-      content: 'Flagged for human review. A specialist will pick this up.',
-      severity: 'HIGH',
-    }])
-  }
+  const handleSend = () => { setSuggestions([]); send(input); setInput('') }
+  const started = messages.length > 0
 
   return (
-    <div className="flex-1 flex">
-      {/* Chat column */}
-      <div className={clsx('flex-1 flex flex-col min-w-0', showFlow ? 'border-r border-ink-300/60' : '')}>
-        <div ref={listRef} className="flex-1 overflow-y-auto px-6 py-4 max-w-3xl mx-auto w-full">
-          {messages.length === 0 && (
-            <div className="text-center text-ink-500 mt-20">
-              <p className="text-sm">Ask anything about suppliers, shipments, or inventory.</p>
-              <p className="text-xs mt-1">Try: "Which suppliers had defect rates above 3%?"</p>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Messages */}
+      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4 max-w-3xl w-full mx-auto">
+        {!started && (
+          <div className="flex flex-col items-center justify-center h-full text-center pb-10">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mb-4 shadow-lg">
+              <Zap size={28} className="text-white" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">
+              Welcome to Supply Chain Risk Intelligence Assistant
+            </h2>
+            <p className="text-sm text-gray-500 max-w-md">
+              Ask me about supplier risks, shipment delays, inventory anomalies, or any supply chain disruption.
+            </p>
+          </div>
+        )}
+        {messages.map((msg) => <Message key={msg.id} msg={msg} onFeedback={onFeedback} />)}
+      </div>
+
+      {/* Input bar */}
+      <div className="bg-white border-t border-gray-200 px-4 py-3 flex-shrink-0">
+        <div className="max-w-3xl mx-auto relative">
+          {/* Suggestion dropdown */}
+          {suggestions.length > 0 && (
+            <div className="absolute bottom-full mb-2 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-10">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onMouseDown={(e) => { e.preventDefault(); acceptSuggestion(s) }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 border-b border-gray-100 last:border-0 truncate"
+                >
+                  <span className="text-indigo-500 mr-1">↑</span>{s}
+                </button>
+              ))}
+              <div className="px-4 py-1.5 text-xs text-gray-400 bg-gray-50">Tab to accept · Esc to dismiss</div>
             </div>
           )}
-          {messages.map((m) => (
-            <Message key={m.id} msg={m} onShowDocs={onShowDocs} onFeedback={onFeedback} onEscalate={onEscalate} />
-          ))}
-        </div>
-        <div className="border-t border-ink-300/60 bg-white px-6 py-3">
-          <div className="max-w-3xl mx-auto flex items-end gap-2">
+          <div className="flex items-end gap-2 bg-white border-2 border-gray-300 rounded-2xl px-4 py-2.5 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
             <textarea
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-              rows={1}
-              placeholder="Ask about supply chain risks…"
-              className="flex-1 resize-none border border-ink-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
+              onKeyDown={handleKey}
+              placeholder="Ask about supply chain risks, shipment delays, inventory…"
+              className="flex-1 resize-none text-sm text-gray-800 outline-none bg-transparent placeholder-gray-400 max-h-32 overflow-y-auto"
+              style={{ minHeight: '24px' }}
             />
             <button
-              onClick={() => setShowFlow((v) => !v)}
-              className="inline-flex items-center px-2 py-2 rounded-md border border-ink-300 text-ink-700 hover:bg-ink-100"
-              title={showFlow ? 'Hide flow panel' : 'Show flow panel'}
+              onClick={handleSend}
+              disabled={!input.trim() || sending}
+              className="mb-0.5 p-2 rounded-xl bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700 transition-colors flex-shrink-0"
             >
-              {showFlow ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
+          </div>
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <span className="text-xs text-gray-400 min-h-[16px]">{liveStatus}</span>
             <button
-              onClick={send}
-              disabled={sending || !input.trim()}
-              className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-brand-600 text-white text-sm disabled:opacity-50"
+              onClick={() => setShowModal(true)}
+              className="text-xs text-indigo-500 hover:text-indigo-700 underline underline-offset-2"
             >
-              <Send size={14} /> Send
+              View Process
             </button>
           </div>
         </div>
       </div>
 
-      {/* Flow side panel */}
-      {showFlow && (
-        <aside className="w-[460px] xl:w-[520px] shrink-0 bg-ink-100/40 overflow-y-auto">
-          <FlowViz flow={flow} compact />
-        </aside>
+      {showModal && (
+        <ProcessModal nodeStatus={nodeStatus} timeline={timeline} onClose={() => setShowModal(false)} />
       )}
-
-      <DocsDrawer open={drawer.open} docs={drawer.docs} onClose={() => setDrawer({ open: false, docs: [] })} />
     </div>
   )
 }

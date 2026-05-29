@@ -1,6 +1,7 @@
 """Chat endpoints — REST query + WebSocket streaming + HILT feedback."""
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import Any, Dict, List, Optional
@@ -40,7 +41,7 @@ def _docs_for_response(docs: List[Dict[str, Any]], limit: int = 5) -> List[Retri
     return out
 
 
-def _run_graph(query: str, session_id: str) -> Dict[str, Any]:
+def _run_graph_sync(query: str, session_id: str) -> Dict[str, Any]:
     graph = get_graph()
     config = {"configurable": {"thread_id": session_id}}
     init_state = {
@@ -51,18 +52,37 @@ def _run_graph(query: str, session_id: str) -> Dict[str, Any]:
         "retrieved_docs": [],
         "needs_human": False,
     }
-    final_state = graph.invoke(init_state, config=config)
-    return final_state
+    return graph.invoke(init_state, config=config)
 
 
-# ---------------- REST ----------------
+def _stream_graph_sync(query: str, session_id: str):
+    """Generator: yields (node_name, update_dict) for each LangGraph chunk."""
+    graph = get_graph()
+    config = {"configurable": {"thread_id": session_id}}
+    init_state = {
+        "query": query,
+        "session_id": session_id,
+        "messages": [HumanMessage(content=query)],
+        "agent_outputs": {},
+        "retrieved_docs": [],
+        "needs_human": False,
+    }
+    chunks = list(graph.stream(init_state, config=config, stream_mode="updates"))
+    final_state = graph.get_state(config).values
+    return chunks, final_state
+
+
+# ── REST endpoint ──────────────────────────────────────────────────────────
 @router.post("/query", response_model=ChatResponse)
 async def query(req: ChatRequest) -> ChatResponse:
-    guard = validate_input(req.query)
+    guard = await asyncio.to_thread(validate_input, req.query)
     if not guard.ok:
         raise HTTPException(status_code=400, detail=guard.reason)
 
     session_id = req.session_id or str(uuid.uuid4())
+
+    if guard.fast_reply:
+        return ChatResponse(answer=guard.fast_reply, session_id=session_id)
 
     cached = semantic_cache.lookup(req.query)
     if cached:
@@ -76,7 +96,7 @@ async def query(req: ChatRequest) -> ChatResponse:
 
     token = current_session_id.set(session_id)
     try:
-        state = _run_graph(req.query, session_id)
+        state = await asyncio.to_thread(_run_graph_sync, req.query, session_id)
     finally:
         current_session_id.reset(token)
         event_bus.clear(session_id)
@@ -86,29 +106,18 @@ async def query(req: ChatRequest) -> ChatResponse:
     docs = _docs_for_response(state.get("retrieved_docs", []))
 
     resp = ChatResponse(
-        answer=answer,
-        session_id=session_id,
-        severity=severity,
-        docs=docs,
-        needs_human=bool(state.get("needs_human", False)),
+        answer=answer, session_id=session_id, severity=severity,
+        docs=docs, needs_human=bool(state.get("needs_human", False)),
     )
-
-    semantic_cache.store(
-        req.query,
-        {
-            "answer": resp.answer,
-            "severity": resp.severity,
-            "docs": [d.model_dump() for d in resp.docs],
-            "needs_human": resp.needs_human,
-        },
-    )
+    semantic_cache.store(req.query, {
+        "answer": resp.answer, "severity": resp.severity,
+        "docs": [d.model_dump() for d in resp.docs], "needs_human": resp.needs_human,
+    })
     return resp
 
 
-# ---------------- WebSocket streaming ----------------
+# ── Helpers ────────────────────────────────────────────────────────────────
 async def _flush_events(ws: WebSocket, session_id: str) -> None:
-    """Forward bus events to the WS. The inner event's `type` is preserved as
-    `event_type` to avoid clashing with the outer envelope type."""
     events = event_bus.drain(session_id)
     for ev in events:
         inner = dict(ev)
@@ -116,6 +125,7 @@ async def _flush_events(ws: WebSocket, session_id: str) -> None:
         await ws.send_text(json.dumps({"type": "event", "event_type": kind, **inner}))
 
 
+# ── WebSocket ──────────────────────────────────────────────────────────────
 @router.websocket("/ws")
 async def chat_ws(ws: WebSocket):
     await ws.accept()
@@ -130,22 +140,35 @@ async def chat_ws(ws: WebSocket):
 
             query_text = (msg.get("query") or "").strip()
             session_id = msg.get("session_id") or str(uuid.uuid4())
+
             if not query_text:
                 await ws.send_text(json.dumps({"type": "error", "detail": "empty query"}))
                 continue
 
-            await ws.send_text(json.dumps({"type": "run_start", "session_id": session_id, "query": query_text}))
+            await ws.send_text(json.dumps({"type": "run_start", "session_id": session_id}))
 
             token = current_session_id.set(session_id)
             try:
-                guard = validate_input(query_text)
+                # Run sync guardrail in thread — does not block event loop
+                guard = await asyncio.to_thread(validate_input, query_text)
                 await _flush_events(ws, session_id)
-                if not guard.ok:
-                    await ws.send_text(
-                        json.dumps({"type": "guard_block", "detail": guard.reason, "severity": guard.severity})
-                    )
+
+                # Fast-reply for greetings (no pipeline at all)
+                if guard.fast_reply:
+                    await ws.send_text(json.dumps({
+                        "type": "final", "session_id": session_id,
+                        "answer": guard.fast_reply, "severity": "LOW",
+                        "docs": [], "needs_human": False,
+                    }))
                     continue
 
+                if not guard.ok:
+                    await ws.send_text(json.dumps({
+                        "type": "guard_block", "detail": guard.reason, "severity": guard.severity,
+                    }))
+                    continue
+
+                # Cache lookup
                 cached = semantic_cache.lookup(query_text)
                 if cached:
                     await ws.send_text(json.dumps({
@@ -157,65 +180,51 @@ async def chat_ws(ws: WebSocket):
                     }))
                     continue
 
-                graph = get_graph()
-                config = {"configurable": {"thread_id": session_id}}
-                init_state = {
-                    "query": query_text,
-                    "session_id": session_id,
-                    "messages": [HumanMessage(content=query_text)],
-                    "agent_outputs": {},
-                    "retrieved_docs": [],
-                    "needs_human": False,
-                }
-
+                # Run graph in thread pool — keeps event loop free
                 try:
-                    for chunk in graph.stream(init_state, config=config, stream_mode="updates"):
-                        # Forward LangGraph node update first
-                        for node_name, update in chunk.items():
-                            await ws.send_text(json.dumps({
-                                "type": "node_update",
-                                "node": node_name,
-                                "severity": (update or {}).get("severity"),
-                                "intent": (update or {}).get("intent"),
-                            }))
-                        # Then flush rich events collected during the chunk
-                        await _flush_events(ws, session_id)
-                except Exception as e:  # noqa: BLE001
-                    logger.exception("graph.stream failed")
+                    chunks, final_state = await asyncio.to_thread(
+                        _stream_graph_sync, query_text, session_id
+                    )
+                except Exception as e:
+                    logger.exception("graph stream failed")
                     await ws.send_text(json.dumps({"type": "error", "detail": repr(e)}))
                     continue
 
-                # Final flush of any trailing events
+                # Send node updates
+                for chunk in chunks:
+                    for node_name, update in chunk.items():
+                        await ws.send_text(json.dumps({
+                            "type": "node_update",
+                            "node": node_name,
+                            "severity": (update or {}).get("severity"),
+                            "intent": (update or {}).get("intent"),
+                        }))
+                    await _flush_events(ws, session_id)
+
                 await _flush_events(ws, session_id)
 
-                final_state = graph.get_state(config).values
                 answer = final_state.get("final_answer") or ""
                 severity = (final_state.get("severity") or "LOW").upper()
                 docs = [d.model_dump() for d in _docs_for_response(final_state.get("retrieved_docs", []))]
 
                 payload = {
-                    "type": "final",
-                    "session_id": session_id,
-                    "answer": answer,
-                    "severity": severity,
-                    "docs": docs,
-                    "needs_human": bool(final_state.get("needs_human", False)),
+                    "type": "final", "session_id": session_id,
+                    "answer": answer, "severity": severity,
+                    "docs": docs, "needs_human": bool(final_state.get("needs_human", False)),
                 }
                 await ws.send_text(json.dumps(payload))
-                semantic_cache.store(
-                    query_text,
-                    {
-                        "answer": answer, "severity": severity,
-                        "docs": docs, "needs_human": payload["needs_human"],
-                    },
-                )
+                semantic_cache.store(query_text, {
+                    "answer": answer, "severity": severity,
+                    "docs": docs, "needs_human": payload["needs_human"],
+                })
+
             finally:
                 current_session_id.reset(token)
                 event_bus.clear(session_id)
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.exception("WebSocket loop error")
         try:
             await ws.send_text(json.dumps({"type": "error", "detail": repr(e)}))
@@ -223,19 +232,16 @@ async def chat_ws(ws: WebSocket):
             pass
 
 
-# ---------------- HILT feedback ----------------
+# ── HILT feedback ──────────────────────────────────────────────────────────
 @router.post("/feedback")
 async def feedback(req: FeedbackRequest) -> dict:
     feedback_store.add(
-        session_id=req.session_id,
-        message_id=req.message_id,
-        rating=req.rating,
-        note=req.note,
+        session_id=req.session_id, message_id=req.message_id,
+        rating=req.rating, note=req.note,
     )
     return {"ok": True}
 
 
 @router.get("/feedback")
 async def list_feedback(limit: int = 50) -> dict:
-    items = feedback_store.list(limit=limit)
-    return {"items": items, "count": len(items)}
+    return {"items": feedback_store.list(limit=limit), "count": feedback_store.list(limit=limit).__len__()}

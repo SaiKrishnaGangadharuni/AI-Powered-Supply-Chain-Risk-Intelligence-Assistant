@@ -56,3 +56,11 @@
 - Switching providers requires re-ingest into a fresh Chroma collection (dimension is fixed per collection: 1536 vs 384). Clear CHROMA_PERSIST_DIR before re-ingesting.
 - Verified: app imports with new routing, default provider=openai. fastembed embed not runnable in sandbox (no outbound to download model); validated on user machine after `pip install fastembed`.
 - Root cause of ingestion failure this session: OpenAI key in .env is invalid (401 invalid_api_key) — pipeline otherwise ran fully (180k loaded, 2500 transformed/built, Chroma connected). Fix = valid key, OR switch to fastembed.
+
+## 2026-05-29 — Final audit + all fixes complete
+
+- All 6 fixes applied: unused LineChart import removed (Analytics.jsx) · EMBEDDING_PROVIDER=fastembed + DIM=384 in .env.example · _get_pipeline_fn() rewritten with get_graph() (no more NotImplementedError) · IngestionRunRequest stale class removed from schemas.py · evaluation.py + schemas.py null-byte corruption fixed via heredoc rewrite.
+- All backend Python files pass py_compile (zero syntax errors). All 5 frontend routes present. client.js get() helper confirmed.
+- Project is COMPLETE: backend (FastAPI + LangGraph + hybrid RAG + evaluation + anomaly + analytics) + frontend (Chat/Flow/Analytics/Admin/Presentation) + docs (README + architecture SVG + design.md).
+- To run locally: `uvicorn backend.app.main:app --reload --port 8000` (root) + `cd frontend && npm run dev`. Ingest first via POST /api/ingestion/run.
+- Before presenting: refresh OpenAI key in .env (or set EMBEDDING_PROVIDER=fastembed to run zero-cost). Run ingestion, then smoke-test /health + /api/chat/query.

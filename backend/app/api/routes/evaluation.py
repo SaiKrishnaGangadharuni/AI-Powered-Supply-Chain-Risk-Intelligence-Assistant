@@ -82,13 +82,26 @@ def _run_ragas(request: EvalRequest) -> Dict[str, Any]:
 def _get_pipeline_fn():
     """Return a callable that routes a question through the live RAG pipeline."""
     async def pipeline_fn(question: str) -> Dict[str, Any]:
-        # Import here to avoid circular dependency
-        from app.agents.orchestrator import run_pipeline  # noqa: F401
-        # Placeholder: replace run_pipeline with actual graph invocation
-        # Expected return: {"answer": str, "contexts": list[str]}
-        raise NotImplementedError(
-            "Live pipeline_fn not wired. Set offline=True or implement run_pipeline."
-        )
+        import uuid
+        from langchain_core.messages import HumanMessage
+        from app.agents.graph import get_graph
+
+        graph = get_graph()
+        session_id = str(uuid.uuid4())[:8]
+        config = {"configurable": {"thread_id": session_id}}
+        init_state = {
+            "query": question,
+            "session_id": session_id,
+            "messages": [HumanMessage(content=question)],
+            "agent_outputs": {},
+            "retrieved_docs": [],
+            "needs_human": False,
+        }
+        result = graph.invoke(init_state, config=config)
+        docs = result.get("retrieved_docs", [])
+        contexts = [d.get("text", "") for d in docs[:5]]
+        return {"answer": result.get("final_answer", ""), "contexts": contexts}
+
     return pipeline_fn
 
 

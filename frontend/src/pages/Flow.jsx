@@ -1,349 +1,266 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  Send, Activity, ShieldCheck, ShieldAlert, RefreshCw, UserCheck,
-  CheckCircle2, AlertCircle, Circle, Loader2, Sparkles,
-} from 'lucide-react'
-import clsx from 'clsx'
-import { api } from '../api/client.js'
-import SeverityBadge from '../components/SeverityBadge.jsx'
+import { useEffect, useState } from 'react'
+import { useChatContext } from '../context/ChatContext.jsx'
 
-const NODES = [
-  { id: 'orchestrator',           label: 'Orchestrator',          desc: 'Intent + severity' },
-  { id: 'supplier_risk',          label: 'Supplier Risk',         desc: 'Defects, lead times' },
-  { id: 'shipment_analysis',      label: 'Shipment Analysis',     desc: 'Late risk, transit' },
-  { id: 'inventory_intelligence', label: 'Inventory Intel',       desc: 'Stock, sell-through' },
-  { id: 'recommendation',         label: 'Recommendation',        desc: 'Synthesize + answer' },
-]
-
-const initialNodeState = () => Object.fromEntries(
-  NODES.map((n) => [n.id, {
-    status: 'idle', elapsed_ms: null, max_score: null,
-    doc_count: null, error: null, retried: false,
-  }])
-)
-
-function uid() { return Math.random().toString(36).slice(2, 10) }
-function fmtMs(ms) { return ms == null ? '—' : ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s` }
-
-function StatusIcon({ status }) {
-  if (status === 'running') return <Loader2 size={14} className="animate-spin text-brand-600" />
-  if (status === 'done')    return <CheckCircle2 size={14} className="text-emerald-600" />
-  if (status === 'error')   return <AlertCircle size={14} className="text-rose-600" />
-  return <Circle size={14} className="text-ink-300" />
+/* ─────────────────────────────────────────────────────────────
+   Color palette per stage
+───────────────────────────────────────────────────────────── */
+const C = {
+  indigo:  { bg: '#eef2ff', border: '#818cf8', text: '#3730a3', glow: '#818cf880' },
+  red:     { bg: '#fef2f2', border: '#f87171', text: '#991b1b', glow: '#f8717180' },
+  orange:  { bg: '#fff7ed', border: '#fb923c', text: '#9a3412', glow: '#fb923c80' },
+  yellow:  { bg: '#fefce8', border: '#facc15', text: '#854d0e', glow: '#facc1580' },
+  blue:    { bg: '#eff6ff', border: '#60a5fa', text: '#1e40af', glow: '#60a5fa80' },
+  purple:  { bg: '#faf5ff', border: '#c084fc', text: '#6b21a8', glow: '#c084fc80' },
+  cyan:    { bg: '#ecfeff', border: '#22d3ee', text: '#164e63', glow: '#22d3ee80' },
+  teal:    { bg: '#f0fdfa', border: '#2dd4bf', text: '#134e4a', glow: '#2dd4bf80' },
+  green:   { bg: '#f0fdf4', border: '#4ade80', text: '#14532d', glow: '#4ade8080' },
+  amber:   { bg: '#fffbeb', border: '#fbbf24', text: '#78350f', glow: '#fbbf2480' },
 }
 
-function NodeCard({ node, state, onClick, active }) {
-  const ring = state.status === 'running'
-    ? 'ring-2 ring-brand-500 ring-offset-2 ring-offset-ink-100'
-    : state.status === 'done' ? 'ring-1 ring-emerald-300'
-    : state.status === 'error' ? 'ring-1 ring-rose-300'
-    : 'ring-1 ring-ink-300/60'
+/* ─────────────────────────────────────────────────────────────
+   Single flow node component
+───────────────────────────────────────────────────────────── */
+function Node({ label, sub, color, status, badge }) {
+  const c = C[color] || C.indigo
+  const isActive = status === 'active'
+  const isDone   = status === 'done'
+  const isError  = status === 'error'
+  const isSkip   = status === 'skipped'
+
+  const bg     = isDone ? '#f0fdf4' : isError ? '#fef2f2' : isActive ? c.bg : isSkip ? '#f9fafb' : '#ffffff'
+  const border = isDone ? '#4ade80' : isError ? '#f87171' : isActive ? c.border : '#e5e7eb'
+  const shadow = isActive ? `0 0 0 3px ${c.glow}, 0 4px 12px ${c.glow}` : isDone ? '0 2px 8px #4ade8030' : '0 1px 3px #0000001a'
+
   return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        'relative w-full bg-white rounded-xl px-4 py-3 text-left shadow-sm transition-all',
-        ring,
-        state.status === 'running' && 'shadow-md',
-        active && 'bg-brand-50',
-      )}
-      style={{ minHeight: 110 }}
-    >
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2 min-w-0">
-          <StatusIcon status={state.status} />
-          <span className="text-sm font-semibold text-ink-900 truncate">{node.label}</span>
-        </div>
-        <span className="text-[10px] text-ink-500">{fmtMs(state.elapsed_ms)}</span>
+    <div style={{
+      background: bg, border: `2px solid ${border}`,
+      borderRadius: 12, padding: '10px 14px', minWidth: 150, maxWidth: 190,
+      boxShadow: shadow, transition: 'all 0.35s ease', position: 'relative',
+      opacity: isSkip ? 0.5 : 1,
+    }}>
+      {/* status dot */}
+      <div style={{
+        position: 'absolute', top: 8, right: 8,
+        width: 8, height: 8, borderRadius: '50%',
+        background: isDone ? '#22c55e' : isError ? '#ef4444' : isActive ? c.border : '#d1d5db',
+        boxShadow: isActive ? `0 0 6px ${c.border}` : 'none',
+        animation: isActive ? 'pulse 1.2s ease-in-out infinite' : 'none',
+      }} />
+      <div style={{ fontSize: 12, fontWeight: 600, color: isDone ? '#15803d' : isError ? '#b91c1c' : isActive ? c.text : '#374151', paddingRight: 14 }}>
+        {label}
       </div>
-      <p className="text-[11px] text-ink-500 mb-2">{node.desc}</p>
-      <div className="flex items-center gap-3 text-[11px] text-ink-700">
-        {state.doc_count != null && <span>docs: <strong>{state.doc_count}</strong></span>}
-        {state.max_score != null && <span>score: <strong>{Number(state.max_score).toFixed(2)}</strong></span>}
-        {state.retried && (
-          <span className="inline-flex items-center gap-1 text-amber-700">
-            <RefreshCw size={11} /> CRAG retry
-          </span>
-        )}
-      </div>
-      {state.error && <p className="text-[10px] text-rose-700 mt-1 truncate">{state.error}</p>}
-    </button>
+      {sub && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2, lineHeight: 1.4 }}>{sub}</div>}
+      {badge && <div style={{ marginTop: 4, fontSize: 9, background: '#fef3c7', color: '#92400e', borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>{badge}</div>}
+    </div>
   )
 }
 
-function Connectors() {
+/* Vertical arrow */
+function VArrow({ active, done }) {
+  const color = done ? '#4ade80' : active ? '#818cf8' : '#d1d5db'
   return (
-    <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
-      <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8" />
-        </marker>
-      </defs>
-      <line x1="50%" y1="14%" x2="16.6%" y2="40%" stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arr)" />
-      <line x1="50%" y1="14%" x2="50%"   y2="40%" stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arr)" />
-      <line x1="50%" y1="14%" x2="83.4%" y2="40%" stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arr)" />
-      <line x1="16.6%" y1="62%" x2="50%" y2="86%" stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arr)" />
-      <line x1="50%"   y1="62%" x2="50%" y2="86%" stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arr)" />
-      <line x1="83.4%" y1="62%" x2="50%" y2="86%" stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arr)" />
-    </svg>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 32 }}>
+      <div style={{ width: 2, flex: 1, background: color, transition: 'background 0.3s' }} />
+      <svg width="10" height="6" style={{ display: 'block' }}>
+        <path d="M5 6 L0 0 L10 0 Z" fill={color} />
+      </svg>
+    </div>
   )
 }
 
-function summarize(ev) {
-  const k = ev.event_type
-  if (k === 'node_start') return `${ev.node} started`
-  if (k === 'node_end') return `${ev.node} done in ${ev.elapsed_ms}ms`
-  if (k === 'node_error') return `${ev.node} failed: ${ev.error}`
-  if (k === 'orchestrator_decision') return `intent=${ev.intent} · severity=${ev.severity}`
-  if (k === 'retrieval')
-    return `retrieved ${ev.docs} docs, max ${Number(ev.max_score).toFixed(2)}${ev.reformulated_from ? ' (CRAG)' : ''}`
-  if (k === 'crag_retry')
-    return `CRAG: "${ev.original_query}" → "${ev.reformulated}" (prev ${Number(ev.prev_max_score).toFixed(2)} < ${ev.threshold})`
-  if (k === 'guardrail') return ev.ok ? `${ev.stage} guard ok` : `${ev.stage} guard blocked: ${ev.reason}`
-  if (k === 'hilt_interrupt') return `HILT interrupt — ${ev.reason}`
-  if (k === 'faithfulness')
-    return `faithfulness=${ev.faithful}${ev.pii_redacted?.length ? ` · PII redacted (${ev.pii_redacted.join(',')})` : ''}`
-  return k || 'event'
-}
-
-function eventIcon(ev) {
-  switch (ev.event_type) {
-    case 'orchestrator_decision': return <Sparkles size={12} className="text-brand-600" />
-    case 'retrieval':             return <Activity size={12} className="text-ink-500" />
-    case 'crag_retry':            return <RefreshCw size={12} className="text-amber-600" />
-    case 'guardrail':             return ev.ok
-      ? <ShieldCheck size={12} className="text-emerald-600" />
-      : <ShieldAlert size={12} className="text-rose-600" />
-    case 'hilt_interrupt':        return <UserCheck size={12} className="text-rose-600" />
-    case 'faithfulness':          return ev.faithful
-      ? <ShieldCheck size={12} className="text-emerald-600" />
-      : <ShieldAlert size={12} className="text-rose-600" />
-    case 'node_start':            return <Loader2 size={12} className="text-brand-600" />
-    case 'node_end':              return <CheckCircle2 size={12} className="text-emerald-600" />
-    case 'node_error':            return <AlertCircle size={12} className="text-rose-600" />
-    default:                      return <Circle size={12} className="text-ink-400" />
-  }
-}
-
-function EventRow({ ev }) {
-  const ts = new Date(ev.t * 1000).toLocaleTimeString()
+/* Horizontal branch line from center to left/right */
+function HBranch({ dir, active, done }) {
+  const color = done ? '#4ade80' : active ? '#c084fc' : '#d1d5db'
   return (
-    <li className="flex items-start gap-2 text-[11px] py-1.5 border-b border-ink-300/30">
-      <span className="mt-0.5">{eventIcon(ev)}</span>
-      <span className="text-ink-500 tabular-nums w-16">{ts}</span>
-      <span className="flex-1 text-ink-700">{summarize(ev)}</span>
-    </li>
+    <div style={{
+      width: '50%', height: 2, background: color,
+      alignSelf: dir === 'left' ? 'flex-end' : 'flex-start',
+      transition: 'background 0.3s',
+      marginTop: 20,
+    }} />
   )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Main Flow page
+───────────────────────────────────────────────────────────── */
+const NODE_MAP = {
+  orchestrator: 'orchestrator', supplier_risk: 'supplier_risk',
+  shipment_analysis: 'shipment', inventory_intelligence: 'inventory',
+  recommendation: 'recommendation',
 }
 
 export default function Flow() {
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [sessionId] = useState(() => uid())
-  const [nodeState, setNodeState] = useState(initialNodeState)
-  const [events, setEvents] = useState([])
-  const [orchestratorInfo, setOrchestratorInfo] = useState({ intent: null, severity: null })
-  const [finalAnswer, setFinalAnswer] = useState(null)
-  const [selected, setSelected] = useState(null)
-  const wsRef = useRef(null)
-  const timelineRef = useRef(null)
-  const lastRunningRef = useRef(null) // track which node is currently running for retrieval-event attribution
+  const { messages, liveStatus } = useChatContext()
+  const [ns, setNs] = useState({})          // nodeStatus map
+  const [timeline, setTimeline] = useState([])
+  const [retries,  setRetries]  = useState([])
 
   useEffect(() => {
-    if (timelineRef.current) timelineRef.current.scrollTop = timelineRef.current.scrollHeight
-  }, [events])
-
-  useEffect(() => {
-    const ws = api.openChatSocket()
-    wsRef.current = ws
-    ws.onmessage = (evt) => {
-      let data
-      try { data = JSON.parse(evt.data) } catch { return }
-
-      if (data.type === 'event') {
-        setEvents((arr) => [...arr, data])
-        const k = data.event_type
-
-        if (k === 'node_start') {
-          lastRunningRef.current = data.node
-          setNodeState((s) => ({ ...s, [data.node]: { ...(s[data.node] || {}), status: 'running' } }))
-        } else if (k === 'node_end') {
-          setNodeState((s) => ({
-            ...s,
-            [data.node]: { ...(s[data.node] || {}), status: 'done', elapsed_ms: data.elapsed_ms },
-          }))
-          if (lastRunningRef.current === data.node) lastRunningRef.current = null
-        } else if (k === 'node_error') {
-          setNodeState((s) => ({
-            ...s,
-            [data.node]: { ...(s[data.node] || {}), status: 'error', error: data.error },
-          }))
-        } else if (k === 'orchestrator_decision') {
-          setOrchestratorInfo({ intent: data.intent, severity: data.severity })
-        } else if (k === 'retrieval') {
-          const running = lastRunningRef.current
-          if (running) {
-            setNodeState((s) => ({
-              ...s,
-              [running]: { ...s[running], doc_count: data.docs, max_score: data.max_score },
-            }))
-          }
-        } else if (k === 'crag_retry') {
-          const running = lastRunningRef.current
-          if (running) {
-            setNodeState((s) => ({
-              ...s,
-              [running]: { ...s[running], retried: true },
-            }))
-          }
-        }
-        return
+    const next = {}
+    const tl   = []
+    const rt   = []
+    messages.forEach((m) => {
+      if (m.role !== 'assistant') return
+      if (m.streaming && m.content?.startsWith('Running: ')) {
+        const raw = m.content.replace('Running: ', '').replace('…', '').toLowerCase().replace(/ /g, '_')
+        const id = NODE_MAP[raw] || raw
+        next[id] = 'active'
+        tl.push(m.content)
       }
-
-      if (data.type === 'guard_block') {
-        setSending(false)
-        setFinalAnswer({ answer: `Blocked by input guard: ${data.detail}`, severity: data.severity || 'LOW', docs: [] })
-      } else if (data.type === 'cached') {
-        setSending(false)
-        setFinalAnswer({ answer: data.answer, severity: data.severity, docs: data.docs, cached: true })
-      } else if (data.type === 'final') {
-        setSending(false)
-        setFinalAnswer({
-          answer: data.answer, severity: data.severity,
-          docs: data.docs, needs_human: data.needs_human,
-        })
-      } else if (data.type === 'error') {
-        setSending(false)
-        setFinalAnswer({ answer: `Error: ${data.detail}`, severity: 'LOW', docs: [] })
+      if (!m.streaming && m.content && !m.content.startsWith('Running:') && !m.content.startsWith('I can')) {
+        next['recommendation'] = 'done'
+        next['guard_out']      = 'done'
+        next['hilt']           = m.needs_human ? 'active' : 'done'
+        if (m.cached) { next['cache'] = 'done'; tl.push('Cache hit ⚡') }
       }
-    }
-    return () => { try { ws.close() } catch {} }
-  }, [])
+    })
+    setNs(next)
+    setTimeline(tl)
+    setRetries(rt)
+  }, [messages])
 
-  const handleSend = useCallback(() => {
-    const q = input.trim()
-    if (!q || sending) return
-    setNodeState(initialNodeState())
-    setEvents([])
-    setOrchestratorInfo({ intent: null, severity: null })
-    setFinalAnswer(null)
-    setSelected(null)
-    lastRunningRef.current = null
-    setSending(true)
-    const ws = wsRef.current
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ query: q, session_id: sessionId }))
-    } else {
-      setSending(false)
-    }
-  }, [input, sending, sessionId])
+  const s = (id) => ns[id] || 'pending'
+
+  const agentsActive = s('supplier_risk') === 'active' || s('shipment') === 'active' || s('inventory') === 'active'
+  const agentsDone   = s('supplier_risk') === 'done'   && s('shipment') === 'done'   && s('inventory') === 'done'
 
   return (
-    <div className="flex-1 flex flex-col">
-      {/* Query bar */}
-      <div className="border-b border-ink-300/60 bg-white px-6 py-3">
-        <div className="max-w-5xl mx-auto flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSend() }}
-            placeholder="Ask about supply chain risks (watch the pipeline run live)…"
-            className="flex-1 border border-ink-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-          />
-          <button
-            onClick={handleSend}
-            disabled={sending || !input.trim()}
-            className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-brand-600 text-white text-sm disabled:opacity-50"
-          >
-            <Send size={14} /> Run
-          </button>
-        </div>
-      </div>
+    <div style={{ display: 'flex', height: 'calc(100vh - 84px)', background: '#f8fafc', fontFamily: 'system-ui, sans-serif' }}>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Graph */}
-        <div className="flex-1 overflow-auto p-6">
-          {orchestratorInfo.intent && (
-            <div className="mb-3 flex items-center gap-3 text-xs text-ink-700">
-              <span>intent: <code className="bg-ink-100 px-1.5 py-0.5 rounded">{orchestratorInfo.intent}</code></span>
-              <SeverityBadge severity={orchestratorInfo.severity} />
+      {/* ── Main flow canvas ── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 2 }}>End-to-End Pipeline</div>
+        <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 24 }}>Send a query from Chat — nodes activate live</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+
+          {/* USER INPUT */}
+          <Node label="User Query" sub="Operations manager enters disruption query" color="indigo" status={messages.length ? 'done' : 'pending'} />
+          <VArrow active={false} done={messages.length > 0} />
+
+          {/* INPUT GUARDRAILS */}
+          <Node label="Input Guardrails" sub="Injection · domain check · toxic filter" color="red" status={s('guard_in')} />
+          <VArrow active={s('compress') === 'active'} done={s('compress') === 'done'} />
+
+          {/* PROMPT COMPRESSION */}
+          <Node label="Prompt Compression" sub="Token trimming · LLMLingua" color="orange" status={s('compress')} />
+          <VArrow active={s('cache') === 'active'} done={s('cache') === 'done'} />
+
+          {/* CACHE */}
+          <Node label="Cache Lookup" sub="Semantic (cosine ≥ 0.92) · keyword LRU" color="yellow" status={s('cache')} badge={s('cache') === 'done' && ns['cache'] === 'done' ? 'cache hit ⚡' : null} />
+          <VArrow active={s('orchestrator') === 'active'} done={s('orchestrator') === 'done' || s('orchestrator') === 'active'} />
+
+          {/* ORCHESTRATOR */}
+          <Node label="Orchestrator" sub="Intent classification · severity · A2A fan-out" color="blue" status={s('orchestrator')} />
+
+          {/* FAN-OUT to 3 agents in parallel */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%', justifyContent: 'center', marginTop: 0 }}>
+            {/* left branch line */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingTop: 20 }}>
+              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb', transition: 'background 0.3s' }} />
+              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb' }} />
             </div>
-          )}
-
-          <div className="relative bg-ink-100/40 rounded-xl p-6" style={{ minHeight: 560 }}>
-            <Connectors />
-            <div className="relative grid grid-rows-3 gap-12 h-full">
-              {/* orchestrator */}
-              <div className="grid grid-cols-3 gap-4">
-                <div />
-                <NodeCard node={NODES[0]} state={nodeState.orchestrator}
-                  active={selected === 'orchestrator'} onClick={() => setSelected('orchestrator')} />
-                <div />
-              </div>
-              {/* 3 specialists */}
-              <div className="grid grid-cols-3 gap-4">
-                {NODES.slice(1, 4).map((n) => (
-                  <NodeCard key={n.id} node={n} state={nodeState[n.id]}
-                    active={selected === n.id} onClick={() => setSelected(n.id)} />
-                ))}
-              </div>
-              {/* recommendation */}
-              <div className="grid grid-cols-3 gap-4">
-                <div />
-                <NodeCard node={NODES[4]} state={nodeState.recommendation}
-                  active={selected === 'recommendation'} onClick={() => setSelected('recommendation')} />
-                <div />
-              </div>
+            {/* center line */}
+            <div style={{ width: 2, height: 44, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb', marginTop: 0, transition: 'background 0.3s' }} />
+            {/* right branch line */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', paddingTop: 20 }}>
+              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb', transition: 'background 0.3s' }} />
+              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb' }} />
             </div>
           </div>
 
-          {finalAnswer && (
-            <div className="mt-6 bg-white rounded-xl border border-ink-300/60 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="text-sm font-semibold">Final answer</h3>
-                <SeverityBadge severity={finalAnswer.severity} />
-                {finalAnswer.cached && <span className="text-[11px] text-ink-500">cached</span>}
-                {finalAnswer.needs_human && (
-                  <span className="text-[11px] px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 border border-rose-200">
-                    HILT escalation
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-ink-900 whitespace-pre-wrap">{finalAnswer.answer}</p>
-              {finalAnswer.docs?.length > 0 && (
-                <details className="mt-3">
-                  <summary className="text-xs text-brand-600 cursor-pointer">
-                    {finalAnswer.docs.length} retrieved sources
-                  </summary>
-                  <ul className="mt-2 space-y-2">
-                    {finalAnswer.docs.map((d) => (
-                      <li key={d.id} className="text-[11px] border border-ink-300/60 rounded-md p-2 bg-ink-100/40">
-                        <code className="text-ink-500">{d.id}</code> · score {Number(d.score).toFixed(2)}
-                        <p className="text-ink-700 mt-1">{d.text}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          )}
-        </div>
+          {/* 3 AGENTS side by side */}
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+            <Node label="Supplier Risk Agent"     sub="Historical supplier incidents" color="purple" status={s('supplier_risk')} />
+            <Node label="Shipment Analysis"       sub="Delay patterns · mode analysis" color="purple" status={s('shipment')} />
+            <Node label="Inventory Intelligence"  sub="Stock anomalies · demand spikes" color="purple" status={s('inventory')} />
+          </div>
 
-        {/* Right: timeline */}
-        <aside className="w-[360px] border-l border-ink-300/60 bg-white flex flex-col">
-          <header className="px-4 py-3 border-b border-ink-300/60">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Activity size={14} /> Live timeline
-            </h3>
-            <p className="text-[11px] text-ink-500">{events.length} events</p>
-          </header>
-          <ul ref={timelineRef} className="flex-1 overflow-y-auto px-4 py-2">
-            {events.length === 0 && (
-              <li className="text-xs text-ink-500 mt-4 text-center">No events yet — run a query above.</li>
-            )}
-            {events.map((ev, i) => <EventRow key={i} ev={ev} />)}
-          </ul>
-        </aside>
+          {/* Merge lines back */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', justifyContent: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingBottom: 0 }}>
+              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
+              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
+            </div>
+            <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', paddingBottom: 0 }}>
+              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
+              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
+            </div>
+          </div>
+
+          <VArrow active={s('retrieval') === 'active'} done={s('retrieval') === 'done'} />
+
+          {/* RETRIEVAL */}
+          <Node label="Hybrid Retrieval" sub="ChromaDB dense + BM25 sparse → RRF fusion (k=60)" color="cyan" status={s('retrieval')} />
+          <VArrow active={s('rerank') === 'active'} done={s('rerank') === 'done'} />
+
+          {/* RERANK + CRAG */}
+          <Node label="Rerank + CRAG" sub="Cosine rerank · score < 0.6 → query reformulation + retry" color="teal"
+            status={s('rerank')} badge={retries.length ? `${retries.length} retry` : null} />
+          <VArrow active={s('recommendation') === 'active'} done={s('recommendation') === 'done'} />
+
+          {/* RECOMMENDATION */}
+          <Node label="Recommendation Node" sub="Mitigation guidance synthesis (gpt-4o-mini)" color="green" status={s('recommendation')} />
+          <VArrow active={s('guard_out') === 'active'} done={s('guard_out') === 'done'} />
+
+          {/* OUTPUT GUARD */}
+          <Node label="Output Guardrails" sub="Faithfulness check · hallucination filter · DeepEval" color="red" status={s('guard_out')} />
+          <VArrow active={s('hilt') === 'active'} done={s('hilt') === 'done'} />
+
+          {/* HILT */}
+          <Node label="HILT + Feedback" sub="HIGH severity → human review · SQLite feedback store" color="amber" status={s('hilt')} />
+          <VArrow active={false} done={s('hilt') === 'done'} />
+
+          {/* FINAL ANSWER */}
+          <Node label="Final Answer" sub="Explainable mitigation guidance delivered to user" color="indigo"
+            status={s('hilt') === 'done' ? 'done' : 'pending'} />
+        </div>
+      </div>
+
+      {/* ── Right panel: timeline + legend ── */}
+      <div style={{ width: 220, borderLeft: '1px solid #e5e7eb', background: '#fff', padding: '20px 16px', overflowY: 'auto', flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Live Timeline</div>
+        {liveStatus && (
+          <div style={{ fontSize: 11, color: '#4f46e5', background: '#eef2ff', borderRadius: 6, padding: '4px 8px', marginBottom: 8 }}>
+            {liveStatus}
+          </div>
+        )}
+        {timeline.length === 0
+          ? <p style={{ fontSize: 11, color: '#9ca3af' }}>Waiting for query…</p>
+          : timeline.map((t, i) => (
+            <div key={i} style={{ fontSize: 11, color: '#374151', background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: 6, padding: '4px 8px', marginBottom: 4 }}>
+              {t}
+            </div>
+          ))
+        }
+        {retries.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>CRAG Retries</div>
+            {retries.map((r, i) => (
+              <div key={i} style={{ fontSize: 11, background: '#fef3c7', color: '#92400e', borderRadius: 6, padding: '4px 8px', marginBottom: 4 }}>
+                Attempt #{r.attempt} · score {r.score?.toFixed(2)}
+              </div>
+            ))}
+          </>
+        )}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Legend</div>
+          {[
+            ['#d1d5db', 'Pending'],
+            ['#818cf8', 'Active'],
+            ['#22c55e', 'Done'],
+            ['#facc15', 'Skipped'],
+            ['#ef4444', 'Blocked'],
+          ].map(([color, label]) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: '#6b7280' }}>{label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

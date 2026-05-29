@@ -53,10 +53,11 @@ async def health() -> dict:
 
 
 # Routers
-from app.api.routes import anomaly, chat, evaluation, ingestion, mcp_browser  # noqa: E402
+from app.api.routes import analytics, anomaly, chat, evaluation, ingestion, mcp_browser  # noqa: E402
 
-app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-app.include_router(ingestion.router, prefix="/api/ingestion", tags=["ingestion"])
+app.include_router(chat.router,       prefix="/api/chat",       tags=["chat"])
+app.include_router(ingestion.router,  prefix="/api/ingestion",  tags=["ingestion"])
 app.include_router(evaluation.router, prefix="/api/evaluation", tags=["evaluation"])
-app.include_router(mcp_browser.router, prefix="/api/mcp", tags=["mcp"])
-app.include_router(anomaly.router, prefix="/api/anomaly", tags=["anomaly"])
+app.include_router(mcp_browser.router,prefix="/api/mcp",        tags=["mcp"])
+app.include_router(anomaly.router,    prefix="/api/anomaly",    tags=["anomaly"])
+app.include_router(analytics.router,  prefix="/api/analytics",  tags=["analytics"])

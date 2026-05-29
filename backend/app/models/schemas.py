@@ -32,8 +32,3 @@ class FeedbackRequest(BaseModel):
     message_id: str
     rating: Literal["up", "down"]
     note: Optional[str] = None
-
-
-class IngestionRunRequest(BaseModel):
-    source: Literal["kaggle_mcp", "local"] = "kaggle_mcp"
-    dataset: Literal["dataco", "fashion"] = "dataco"
