@@ -67,12 +67,18 @@ services:
         value: llama-3.3-70b-versatile
 
       # --- Embeddings ---
+      # Option A: fastembed (active) — local ONNX, no API key, 384-dim
       - key: EMBEDDING_PROVIDER
-        value: openai          # set to 'fastembed' for local no-key embeddings (then EMBEDDING_DIM=384, re-ingest)
-      - key: EMBEDDING_MODEL
-        value: text-embedding-3-small
+        value: fastembed
       - key: EMBEDDING_DIM
-        value: "1536"
+        value: "384"
+      # Option B: OpenAI (comment out Option A above and uncomment below, then re-ingest)
+      # - key: EMBEDDING_PROVIDER
+      #   value: openai
+      # - key: EMBEDDING_MODEL
+      #   value: text-embedding-3-small
+      # - key: EMBEDDING_DIM
+      #   value: "1536"
       - key: RERANKER_MODEL
         value: cosine
       - key: HUGGINGFACE_TOKEN
