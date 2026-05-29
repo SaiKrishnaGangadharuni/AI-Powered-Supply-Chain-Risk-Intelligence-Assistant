@@ -30,7 +30,7 @@ function Shell({ children }) {
           </nav>
         </div>
       </header>
-      <main className="flex-1 flex flex-col overflow-hidden">{children}</main>
+      <main className="flex-1 flex flex-col overflow-y-auto">{children}</main>
       <footer className="text-xs text-gray-400 py-2 text-center border-t border-gray-200 bg-white">
         AI Powered
       </footer>

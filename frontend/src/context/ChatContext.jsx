@@ -4,6 +4,8 @@ import { api } from '../api/client.js'
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
 const NODE_TO_ID = {
+  cache_lookup:           'cache',
+  domain_check:           'domain_check',
   orchestrator:           'orchestrator',
   supplier_risk:          'supplier_risk',
   shipment_analysis:      'shipment',
@@ -14,24 +16,17 @@ const NODE_TO_ID = {
 const ChatContext = createContext(null)
 
 export function ChatProvider({ children }) {
-  const [messages,    setMessages]    = useState([])
-  const [sending,     setSending]     = useState(false)
-  const [liveStatus,  setLiveStatus]  = useState('')
-  const [sessionId]                   = useState(() => uid())
-  const [nodeStatus,  setNodeStatus]  = useState({})   // id → 'active'|'done'|'error'|'skipped'
-  const [timeline,    setTimeline]    = useState([])   // [{label, type}]
+  const [messages,   setMessages]   = useState([])
+  const [sending,    setSending]    = useState(false)
+  const [liveStatus, setLiveStatus] = useState('')
+  const [sessionId]                 = useState(() => uid())
+  const [nodeStatus, setNodeStatus] = useState({})
+  const [timeline,   setTimeline]   = useState([])
   const wsRef = useRef(null)
 
-  const markNode = (id, status) =>
-    setNodeStatus((prev) => ({ ...prev, [id]: status }))
-
-  const addTimeline = (label, type = 'node') =>
-    setTimeline((prev) => [...prev, { label, type, ts: Date.now() }])
-
-  const resetPipeline = () => {
-    setNodeStatus({})
-    setTimeline([])
-  }
+  const markNode   = (id, status) => setNodeStatus((p) => ({ ...p, [id]: status }))
+  const addTimeline = (label, type = 'node') => setTimeline((p) => [...p, { label, type }])
+  const resetPipeline = () => { setNodeStatus({}); setTimeline([]) }
 
   useEffect(() => {
     const connect = () => {
@@ -44,23 +39,35 @@ export function ChatProvider({ children }) {
 
         if (data.type === 'run_start') {
           resetPipeline()
-          markNode('guard_in',  'active')
-          markNode('compress',  'active')
-          markNode('cache',     'active')
-          setLiveStatus('Checking guardrails…')
+          // New order: instant guard → cache → domain → pipeline
+          markNode('guard_in', 'active')
+          setLiveStatus('Input guardrails…')
 
         } else if (data.type === 'node_update') {
-          const node = data.node || ''
+          const node   = data.node || ''
           const stepId = NODE_TO_ID[node]
-          if (stepId) {
-            // mark previous done
-            const ids = Object.keys(NODE_TO_ID)
-            const prevIdx = ids.indexOf(node) - 1
-            if (prevIdx >= 0) markNode(NODE_TO_ID[ids[prevIdx]], 'done')
+
+          if (node === 'cache_lookup') {
+            markNode('guard_in', 'done')
+            markNode('cache',    'active')
+            setLiveStatus('Cache lookup…')
+            addTimeline('Cache lookup', 'node')
+          } else if (node === 'domain_check') {
+            markNode('cache',        'done')   // cache miss confirmed
+            markNode('domain_check', 'active')
+            setLiveStatus('Domain check…')
+            addTimeline('Domain check (cache miss)', 'node')
+          } else if (stepId) {
+            markNode('domain_check', 'done')
             markNode(stepId, 'active')
+            setLiveStatus(`Running: ${node.replace(/_/g, ' ')}…`)
             addTimeline(`Running: ${node.replace(/_/g, ' ')}`, 'node')
+            // mark previous pipeline node done
+            const pipelineOrder = ['orchestrator','supplier_risk','shipment','inventory','recommendation']
+            const idx = pipelineOrder.indexOf(stepId)
+            if (idx > 0) markNode(pipelineOrder[idx - 1], 'done')
           }
-          setLiveStatus(`Running: ${node.replace(/_/g, ' ')}…`)
+
           setMessages((m) => {
             const next = [...m]
             for (let i = next.length - 1; i >= 0; i--) {
@@ -92,13 +99,13 @@ export function ChatProvider({ children }) {
 
         } else if (data.type === 'cached') {
           markNode('guard_in', 'done')
-          markNode('compress', 'done')
           markNode('cache',    'done')
-          ;['orchestrator','supplier_risk','shipment','inventory',
+          // domain check + full pipeline skipped
+          ;['domain_check','orchestrator','supplier_risk','shipment','inventory',
             'retrieval','rerank','recommendation','guard_out','hilt'].forEach(
             (id) => markNode(id, 'skipped')
           )
-          addTimeline('Cache hit — pipeline skipped ⚡', 'cache')
+          addTimeline('Cache hit — full pipeline skipped ⚡', 'cache')
           setLiveStatus('Cache hit ⚡')
           setMessages((m) => {
             const next = [...m]

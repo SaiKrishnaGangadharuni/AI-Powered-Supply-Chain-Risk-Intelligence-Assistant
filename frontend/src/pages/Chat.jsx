@@ -5,14 +5,15 @@ import { api } from '../api/client.js'
 
 /* ── All possible pipeline steps (ordered) ─────────────────── */
 const ALL_STEPS = [
-  { id: 'guard_in',       label: 'Input Guardrails',        detail: 'Injection · domain check · toxic filter' },
+  { id: 'guard_in',       label: 'Input Guardrails',        detail: 'Injection · length · greeting (instant, zero latency)' },
+  { id: 'cache',          label: 'Cache Lookup',            detail: 'Semantic (cosine ≥ 0.92) + keyword LRU — before domain check' },
+  { id: 'domain_check',   label: 'Domain Check',            detail: 'Groq LLM on-topic check — only on cache miss' },
   { id: 'compress',       label: 'Prompt Compression',      detail: 'Token trimming' },
-  { id: 'cache',          label: 'Cache Lookup',            detail: 'Semantic (cosine ≥ 0.92) + keyword LRU' },
   { id: 'orchestrator',   label: 'Orchestrator',            detail: 'Intent + severity routing (Groq llama-3.1-8b)' },
   { id: 'supplier_risk',  label: 'Supplier Risk Agent',     detail: 'Historical supplier incidents' },
   { id: 'shipment',       label: 'Shipment Analysis Agent', detail: 'Delay patterns · mode analysis' },
   { id: 'inventory',      label: 'Inventory Intelligence',  detail: 'Stock anomalies · demand spikes' },
-  { id: 'retrieval',      label: 'Hybrid Retrieval',        detail: 'ChromaDB dense + BM25 sparse → RRF fusion' },
+  { id: 'retrieval',      label: 'Hybrid Retrieval',        detail: 'ChromaDB ∥ BM25 parallel → RRF fusion (k=60)' },
   { id: 'rerank',         label: 'Rerank + CRAG',           detail: 'Cosine rerank · retry if score < 0.6' },
   { id: 'recommendation', label: 'Recommendation',          detail: 'Mitigation synthesis (gpt-4o-mini)' },
   { id: 'guard_out',      label: 'Output Guardrails',       detail: 'Faithfulness · hallucination filter' },

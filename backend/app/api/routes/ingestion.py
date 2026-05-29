@@ -48,3 +48,19 @@ async def run(req: RunRequest) -> dict:
 
     Thread(target=_runner, daemon=True).start()
     return {"started": True, "dataset": req.dataset, "source": req.source}
+
+
+@router.post("/clear")
+async def clear_vector_db() -> dict:
+    """Delete the ChromaDB collection and reset the BM25 index."""
+    import asyncio
+    from app.retrieval.vector_store import VectorStore
+    from app.retrieval.bm25_index import BM25Index
+
+    def _do_clear():
+        VectorStore().reset()
+        BM25Index().build(ids=[], documents=[], metadatas=[])
+
+    await asyncio.to_thread(_do_clear)
+    status_store.set(pipeline.PipelineStatus(state="idle"))
+    return {"cleared": True, "message": "ChromaDB collection and BM25 index cleared"}

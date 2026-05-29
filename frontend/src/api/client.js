@@ -26,6 +26,8 @@ export const api = {
   ingestionStatus: () => request('/api/ingestion/status'),
   ingestionRun: (body) =>
     request('/api/ingestion/run', { method: 'POST', body: JSON.stringify(body) }),
+  ingestionClear: () =>
+    request('/api/ingestion/clear', { method: 'POST' }),
   mcpHealth: () => request('/api/ingestion/mcp-health'),
 
   // ---- mcp browser ----

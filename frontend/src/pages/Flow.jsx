@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useChatContext } from '../context/ChatContext.jsx'
 
-/* ─────────────────────────────────────────────────────────────
-   Color palette per stage
-───────────────────────────────────────────────────────────── */
 const C = {
   indigo:  { bg: '#eef2ff', border: '#818cf8', text: '#3730a3', glow: '#818cf880' },
   red:     { bg: '#fef2f2', border: '#f87171', text: '#991b1b', glow: '#f8717180' },
@@ -15,249 +12,246 @@ const C = {
   teal:    { bg: '#f0fdfa', border: '#2dd4bf', text: '#134e4a', glow: '#2dd4bf80' },
   green:   { bg: '#f0fdf4', border: '#4ade80', text: '#14532d', glow: '#4ade8080' },
   amber:   { bg: '#fffbeb', border: '#fbbf24', text: '#78350f', glow: '#fbbf2480' },
+  gray:    { bg: '#f9fafb', border: '#d1d5db', text: '#6b7280', glow: '#d1d5db80' },
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Single flow node component
-───────────────────────────────────────────────────────────── */
-function Node({ label, sub, color, status, badge }) {
+function Node({ label, sub, color, status, badge, width = 190 }) {
   const c = C[color] || C.indigo
-  const isActive = status === 'active'
   const isDone   = status === 'done'
+  const isActive = status === 'active'
   const isError  = status === 'error'
   const isSkip   = status === 'skipped'
-
-  const bg     = isDone ? '#f0fdf4' : isError ? '#fef2f2' : isActive ? c.bg : isSkip ? '#f9fafb' : '#ffffff'
+  const bg     = isDone ? '#f0fdf4' : isError ? '#fef2f2' : isActive ? c.bg : isSkip ? '#f9fafb' : '#fff'
   const border = isDone ? '#4ade80' : isError ? '#f87171' : isActive ? c.border : '#e5e7eb'
-  const shadow = isActive ? `0 0 0 3px ${c.glow}, 0 4px 12px ${c.glow}` : isDone ? '0 2px 8px #4ade8030' : '0 1px 3px #0000001a'
-
+  const shadow = isActive ? `0 0 0 3px ${c.glow},0 4px 14px ${c.glow}` : isDone ? '0 2px 8px #4ade8030' : '0 1px 3px #0001'
   return (
-    <div style={{
-      background: bg, border: `2px solid ${border}`,
-      borderRadius: 12, padding: '10px 14px', minWidth: 150, maxWidth: 190,
-      boxShadow: shadow, transition: 'all 0.35s ease', position: 'relative',
-      opacity: isSkip ? 0.5 : 1,
-    }}>
-      {/* status dot */}
-      <div style={{
-        position: 'absolute', top: 8, right: 8,
-        width: 8, height: 8, borderRadius: '50%',
-        background: isDone ? '#22c55e' : isError ? '#ef4444' : isActive ? c.border : '#d1d5db',
-        boxShadow: isActive ? `0 0 6px ${c.border}` : 'none',
-        animation: isActive ? 'pulse 1.2s ease-in-out infinite' : 'none',
-      }} />
-      <div style={{ fontSize: 12, fontWeight: 600, color: isDone ? '#15803d' : isError ? '#b91c1c' : isActive ? c.text : '#374151', paddingRight: 14 }}>
-        {label}
+    <div style={{ background: bg, border: `2px solid ${border}`, borderRadius: 12,
+      padding: '9px 13px', width, boxShadow: shadow, transition: 'all 0.3s',
+      opacity: isSkip ? 0.45 : 1, position: 'relative', flexShrink: 0 }}>
+      <div style={{ position:'absolute', top:8, right:8, width:8, height:8, borderRadius:'50%',
+        background: isDone?'#22c55e':isError?'#ef4444':isActive?c.border:'#d1d5db',
+        boxShadow: isActive?`0 0 6px ${c.border}`:'none',
+        animation: isActive?'pulse 1.2s ease-in-out infinite':'none' }} />
+      <div style={{ fontSize:12, fontWeight:600, paddingRight:14,
+        color: isDone?'#15803d':isError?'#b91c1c':isActive?c.text:'#374151' }}>{label}</div>
+      {sub  && <div style={{ fontSize:10, color:'#9ca3af', marginTop:2, lineHeight:1.4 }}>{sub}</div>}
+      {badge && <div style={{ marginTop:4, fontSize:9, background:'#fef3c7', color:'#92400e',
+        borderRadius:4, padding:'1px 6px', display:'inline-block' }}>{badge}</div>}
+    </div>
+  )
+}
+
+const LINE = (done, active, color='#d1d5db') => ({
+  background: done ? '#4ade80' : active ? color : '#e5e7eb',
+  transition: 'background 0.3s',
+})
+
+function VArrow({ h=32, done=false, active=false, color='#818cf8' }) {
+  const c = done?'#4ade80':active?color:'#d1d5db'
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', height:h }}>
+      <div style={{ width:2, flex:1, ...LINE(done,active,color) }} />
+      <svg width="10" height="6"><path d="M5 6 L0 0 L10 0 Z" fill={c}/></svg>
+    </div>
+  )
+}
+
+// Parallel box: 2 nodes side-by-side with a "∥ parallel" label
+function ParallelPair({ left, right, done, active }) {
+  const lineC = done?'#4ade80':active?'#22d3ee':'#e5e7eb'
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', width:'100%' }}>
+      {/* branch out */}
+      <div style={{ display:'flex', width:370, justifyContent:'space-between', alignItems:'flex-end', height:28 }}>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+          <div style={{ width:2, height:18, ...LINE(done,active,'#22d3ee') }} />
+          <div style={{ height:2, width:'85%', ...LINE(done,active,'#22d3ee') }} />
+        </div>
+        <div style={{ fontSize:9, color:'#22d3ee', fontWeight:700, padding:'0 6px', whiteSpace:'nowrap', marginBottom:2 }}>
+          ∥ parallel
+        </div>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-start' }}>
+          <div style={{ width:2, height:18, ...LINE(done,active,'#22d3ee') }} />
+          <div style={{ height:2, width:'85%', ...LINE(done,active,'#22d3ee') }} />
+        </div>
       </div>
-      {sub && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2, lineHeight: 1.4 }}>{sub}</div>}
-      {badge && <div style={{ marginTop: 4, fontSize: 9, background: '#fef3c7', color: '#92400e', borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>{badge}</div>}
+      {/* nodes */}
+      <div style={{ display:'flex', gap:12 }}>
+        {left}
+        {right}
+      </div>
+      {/* merge */}
+      <div style={{ display:'flex', width:370, justifyContent:'space-between', alignItems:'flex-start', height:28 }}>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+          <div style={{ height:2, width:'85%', ...LINE(done,active,'#22d3ee') }} />
+          <div style={{ width:2, height:18, ...LINE(done,active,'#22d3ee') }} />
+        </div>
+        <div style={{ width:12 }} />
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-start' }}>
+          <div style={{ height:2, width:'85%', ...LINE(done,active,'#22d3ee') }} />
+          <div style={{ width:2, height:18, ...LINE(done,active,'#22d3ee') }} />
+        </div>
+      </div>
     </div>
   )
 }
 
-/* Vertical arrow */
-function VArrow({ active, done }) {
-  const color = done ? '#4ade80' : active ? '#818cf8' : '#d1d5db'
+// Agent fan-out: 1 → 3 → 1
+function AgentFanOut({ s }) {
+  const done   = s('supplier_risk')==='done' && s('shipment')==='done' && s('inventory')==='done'
+  const active = s('supplier_risk')==='active'||s('shipment')==='active'||s('inventory')==='active'
+  const lc     = done?'#4ade80':active?'#c084fc':'#e5e7eb'
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 32 }}>
-      <div style={{ width: 2, flex: 1, background: color, transition: 'background 0.3s' }} />
-      <svg width="10" height="6" style={{ display: 'block' }}>
-        <path d="M5 6 L0 0 L10 0 Z" fill={color} />
-      </svg>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+      {/* fan out */}
+      <div style={{ display:'flex', width:560, justifyContent:'space-between', alignItems:'flex-end', height:32 }}>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+          <div style={{ width:2, height:20, background:lc, transition:'background 0.3s' }} />
+          <div style={{ height:2, width:'90%', background:lc, transition:'background 0.3s' }} />
+        </div>
+        <div style={{ width:2, height:32, background:lc, transition:'background 0.3s' }} />
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-start' }}>
+          <div style={{ width:2, height:20, background:lc, transition:'background 0.3s' }} />
+          <div style={{ height:2, width:'90%', background:lc, transition:'background 0.3s' }} />
+        </div>
+      </div>
+      {/* 3 agents */}
+      <div style={{ display:'flex', gap:10 }}>
+        <Node label="Supplier Risk Agent"    sub="Historical supplier incidents" color="purple" status={s('supplier_risk')} width={170} />
+        <Node label="Shipment Analysis"      sub="Delay patterns · mode"         color="purple" status={s('shipment')}      width={160} />
+        <Node label="Inventory Intelligence" sub="Anomalies · demand spikes"     color="purple" status={s('inventory')}     width={170} />
+      </div>
+      {/* merge */}
+      <div style={{ display:'flex', width:560, justifyContent:'space-between', alignItems:'flex-start', height:32 }}>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+          <div style={{ height:2, width:'90%', background:lc, transition:'background 0.3s' }} />
+          <div style={{ width:2, height:20, background:lc, transition:'background 0.3s' }} />
+        </div>
+        <div style={{ width:2, height:32, background:lc, transition:'background 0.3s' }} />
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'flex-start' }}>
+          <div style={{ height:2, width:'90%', background:lc, transition:'background 0.3s' }} />
+          <div style={{ width:2, height:20, background:lc, transition:'background 0.3s' }} />
+        </div>
+      </div>
     </div>
   )
-}
-
-/* Horizontal branch line from center to left/right */
-function HBranch({ dir, active, done }) {
-  const color = done ? '#4ade80' : active ? '#c084fc' : '#d1d5db'
-  return (
-    <div style={{
-      width: '50%', height: 2, background: color,
-      alignSelf: dir === 'left' ? 'flex-end' : 'flex-start',
-      transition: 'background 0.3s',
-      marginTop: 20,
-    }} />
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────
-   Main Flow page
-───────────────────────────────────────────────────────────── */
-const NODE_MAP = {
-  orchestrator: 'orchestrator', supplier_risk: 'supplier_risk',
-  shipment_analysis: 'shipment', inventory_intelligence: 'inventory',
-  recommendation: 'recommendation',
 }
 
 export default function Flow() {
-  const { messages, liveStatus } = useChatContext()
-  const [ns, setNs] = useState({})          // nodeStatus map
-  const [timeline, setTimeline] = useState([])
-  const [retries,  setRetries]  = useState([])
+  const { messages, liveStatus, nodeStatus: ns_ctx, timeline, } = useChatContext()
+  const [ns, setNs] = useState({})
 
-  useEffect(() => {
-    const next = {}
-    const tl   = []
-    const rt   = []
-    messages.forEach((m) => {
-      if (m.role !== 'assistant') return
-      if (m.streaming && m.content?.startsWith('Running: ')) {
-        const raw = m.content.replace('Running: ', '').replace('…', '').toLowerCase().replace(/ /g, '_')
-        const id = NODE_MAP[raw] || raw
-        next[id] = 'active'
-        tl.push(m.content)
-      }
-      if (!m.streaming && m.content && !m.content.startsWith('Running:') && !m.content.startsWith('I can')) {
-        next['recommendation'] = 'done'
-        next['guard_out']      = 'done'
-        next['hilt']           = m.needs_human ? 'active' : 'done'
-        if (m.cached) { next['cache'] = 'done'; tl.push('Cache hit ⚡') }
-      }
-    })
-    setNs(next)
-    setTimeline(tl)
-    setRetries(rt)
-  }, [messages])
+  useEffect(() => { setNs(ns_ctx || {}) }, [ns_ctx])
 
   const s = (id) => ns[id] || 'pending'
 
-  const agentsActive = s('supplier_risk') === 'active' || s('shipment') === 'active' || s('inventory') === 'active'
-  const agentsDone   = s('supplier_risk') === 'done'   && s('shipment') === 'done'   && s('inventory') === 'done'
-
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 84px)', background: '#f8fafc', fontFamily: 'system-ui, sans-serif' }}>
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+    <div style={{ display:'flex', height:'calc(100vh - 84px)', background:'#f8fafc', fontFamily:'system-ui,sans-serif' }}>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
 
-      {/* ── Main flow canvas ── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 2 }}>End-to-End Pipeline</div>
-        <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 24 }}>Send a query from Chat — nodes activate live</div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-
-          {/* USER INPUT */}
-          <Node label="User Query" sub="Operations manager enters disruption query" color="indigo" status={messages.length ? 'done' : 'pending'} />
-          <VArrow active={false} done={messages.length > 0} />
-
-          {/* INPUT GUARDRAILS */}
-          <Node label="Input Guardrails" sub="Injection · domain check · toxic filter" color="red" status={s('guard_in')} />
-          <VArrow active={s('compress') === 'active'} done={s('compress') === 'done'} />
-
-          {/* PROMPT COMPRESSION */}
-          <Node label="Prompt Compression" sub="Token trimming · LLMLingua" color="orange" status={s('compress')} />
-          <VArrow active={s('cache') === 'active'} done={s('cache') === 'done'} />
-
-          {/* CACHE */}
-          <Node label="Cache Lookup" sub="Semantic (cosine ≥ 0.92) · keyword LRU" color="yellow" status={s('cache')} badge={s('cache') === 'done' && ns['cache'] === 'done' ? 'cache hit ⚡' : null} />
-          <VArrow active={s('orchestrator') === 'active'} done={s('orchestrator') === 'done' || s('orchestrator') === 'active'} />
-
-          {/* ORCHESTRATOR */}
-          <Node label="Orchestrator" sub="Intent classification · severity · A2A fan-out" color="blue" status={s('orchestrator')} />
-
-          {/* FAN-OUT to 3 agents in parallel */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%', justifyContent: 'center', marginTop: 0 }}>
-            {/* left branch line */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingTop: 20 }}>
-              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb', transition: 'background 0.3s' }} />
-              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb' }} />
-            </div>
-            {/* center line */}
-            <div style={{ width: 2, height: 44, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb', marginTop: 0, transition: 'background 0.3s' }} />
-            {/* right branch line */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', paddingTop: 20 }}>
-              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb', transition: 'background 0.3s' }} />
-              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : agentsActive ? '#c084fc' : '#e5e7eb' }} />
-            </div>
-          </div>
-
-          {/* 3 AGENTS side by side */}
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-            <Node label="Supplier Risk Agent"     sub="Historical supplier incidents" color="purple" status={s('supplier_risk')} />
-            <Node label="Shipment Analysis"       sub="Delay patterns · mode analysis" color="purple" status={s('shipment')} />
-            <Node label="Inventory Intelligence"  sub="Stock anomalies · demand spikes" color="purple" status={s('inventory')} />
-          </div>
-
-          {/* Merge lines back */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', justifyContent: 'center' }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingBottom: 0 }}>
-              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
-              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
-            </div>
-            <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', paddingBottom: 0 }}>
-              <div style={{ width: 2, height: 24, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
-              <div style={{ width: '80%', height: 2, background: agentsDone ? '#4ade80' : '#e5e7eb' }} />
-            </div>
-          </div>
-
-          <VArrow active={s('retrieval') === 'active'} done={s('retrieval') === 'done'} />
-
-          {/* RETRIEVAL */}
-          <Node label="Hybrid Retrieval" sub="ChromaDB dense + BM25 sparse → RRF fusion (k=60)" color="cyan" status={s('retrieval')} />
-          <VArrow active={s('rerank') === 'active'} done={s('rerank') === 'done'} />
-
-          {/* RERANK + CRAG */}
-          <Node label="Rerank + CRAG" sub="Cosine rerank · score < 0.6 → query reformulation + retry" color="teal"
-            status={s('rerank')} badge={retries.length ? `${retries.length} retry` : null} />
-          <VArrow active={s('recommendation') === 'active'} done={s('recommendation') === 'done'} />
-
-          {/* RECOMMENDATION */}
-          <Node label="Recommendation Node" sub="Mitigation guidance synthesis (gpt-4o-mini)" color="green" status={s('recommendation')} />
-          <VArrow active={s('guard_out') === 'active'} done={s('guard_out') === 'done'} />
-
-          {/* OUTPUT GUARD */}
-          <Node label="Output Guardrails" sub="Faithfulness check · hallucination filter · DeepEval" color="red" status={s('guard_out')} />
-          <VArrow active={s('hilt') === 'active'} done={s('hilt') === 'done'} />
-
-          {/* HILT */}
-          <Node label="HILT + Feedback" sub="HIGH severity → human review · SQLite feedback store" color="amber" status={s('hilt')} />
-          <VArrow active={false} done={s('hilt') === 'done'} />
-
-          {/* FINAL ANSWER */}
-          <Node label="Final Answer" sub="Explainable mitigation guidance delivered to user" color="indigo"
-            status={s('hilt') === 'done' ? 'done' : 'pending'} />
+      {/* ── Flow canvas ── */}
+      <div style={{ flex:1, overflowY:'auto', padding:'20px 0', display:'flex', flexDirection:'column', alignItems:'center' }}>
+        <div style={{ textAlign:'center', marginBottom:20 }}>
+          <div style={{ fontSize:14, fontWeight:600, color:'#374151' }}>End-to-End Pipeline</div>
+          <div style={{ fontSize:11, color:'#9ca3af' }}>Send a query from Chat — nodes activate live</div>
         </div>
+
+        {/* USER INPUT */}
+        <Node label="User Query" sub="Operations manager enters disruption query" color="indigo" status={messages.length?'done':'pending'} />
+        <VArrow done={messages.length>0} />
+
+        {/* INSTANT GUARDRAILS */}
+        <Node label="Input Guardrails" sub="Injection · length · greeting — instant, zero latency" color="red" status={s('guard_in')} />
+        <VArrow done={s('guard_in')==='done'} active={s('cache')==='active'} />
+
+        {/* CACHE — now before domain check */}
+        <Node label="Cache Lookup" sub="Semantic cosine ≥ 0.92 · keyword LRU  — checked before domain LLM call" color="yellow" status={s('cache')}
+          badge={s('cache')==='done' && s('domain_check')==='skipped' ? 'cache hit ⚡ domain skipped' : null} />
+        <VArrow done={s('cache')==='done'} active={s('domain_check')==='active'} />
+
+        {/* DOMAIN CHECK — only on cache miss */}
+        <Node label="Domain Check" sub="Groq LLM on-topic check — only runs on cache miss" color="orange" status={s('domain_check')} />
+        <VArrow done={s('domain_check')==='done'} active={s('orchestrator')==='active'} />
+
+        {/* ORCHESTRATOR */}
+        <Node label="Orchestrator" sub="Intent classification · severity · A2A fan-out (Groq llama-3.1-8b)" color="blue" status={s('orchestrator')} />
+
+        {/* AGENTS FAN-OUT */}
+        <AgentFanOut s={s} />
+
+        <VArrow done={s('retrieval')==='done'||s('rerank')==='done'} active={s('retrieval')==='active'} />
+
+        {/* PARALLEL RETRIEVAL */}
+        <ParallelPair
+          done={s('retrieval')==='done'}
+          active={s('retrieval')==='active'}
+          left={<Node label="ChromaDB Dense" sub="Embedding vector search (fastembed 384-dim)" color="cyan" status={s('retrieval')} width={175} />}
+          right={<Node label="BM25 Sparse" sub="Keyword index (rank_bm25)" color="cyan" status={s('retrieval')} width={175} />}
+        />
+
+        <VArrow done={s('rerank')==='done'} active={s('rerank')==='active'} color="#2dd4bf" />
+
+        {/* RRF + RERANK + CRAG */}
+        <Node label="RRF Fusion + Rerank + CRAG" sub="Reciprocal Rank Fusion → cosine rerank → score < 0.6 → query reformulation + retry" color="teal" status={s('rerank')} width={370} />
+        <VArrow done={s('recommendation')==='done'} active={s('recommendation')==='active'} />
+
+        {/* RECOMMENDATION */}
+        <Node label="Recommendation Node" sub="Mitigation guidance synthesis (gpt-4o-mini)" color="green" status={s('recommendation')} />
+        <VArrow done={s('guard_out')==='done'} active={s('guard_out')==='active'} />
+
+        {/* OUTPUT GUARDRAILS */}
+        <Node label="Output Guardrails" sub="Faithfulness check · hallucination filter · DeepEval" color="red" status={s('guard_out')} />
+        <VArrow done={s('hilt')==='done'} active={s('hilt')==='active'} />
+
+        {/* HILT */}
+        <Node label="HILT + Feedback" sub="HIGH severity → human review interrupt · SQLite feedback store" color="amber" status={s('hilt')} />
+        <VArrow done={s('hilt')==='done'} />
+
+        {/* FINAL ANSWER */}
+        <Node label="Final Answer" sub="Explainable mitigation guidance delivered to user" color="indigo" status={s('hilt')==='done'?'done':'pending'} />
+
+        <div style={{ height:32 }} />
       </div>
 
-      {/* ── Right panel: timeline + legend ── */}
-      <div style={{ width: 220, borderLeft: '1px solid #e5e7eb', background: '#fff', padding: '20px 16px', overflowY: 'auto', flexShrink: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Live Timeline</div>
+      {/* ── Right panel ── */}
+      <div style={{ width:220, borderLeft:'1px solid #e5e7eb', background:'#fff', padding:'20px 16px', overflowY:'auto', flexShrink:0 }}>
+        <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>Live Timeline</div>
         {liveStatus && (
-          <div style={{ fontSize: 11, color: '#4f46e5', background: '#eef2ff', borderRadius: 6, padding: '4px 8px', marginBottom: 8 }}>
-            {liveStatus}
-          </div>
+          <div style={{ fontSize:11, color:'#4f46e5', background:'#eef2ff', borderRadius:6, padding:'4px 8px', marginBottom:8 }}>{liveStatus}</div>
         )}
-        {timeline.length === 0
-          ? <p style={{ fontSize: 11, color: '#9ca3af' }}>Waiting for query…</p>
-          : timeline.map((t, i) => (
-            <div key={i} style={{ fontSize: 11, color: '#374151', background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: 6, padding: '4px 8px', marginBottom: 4 }}>
-              {t}
+        {timeline.length===0
+          ? <p style={{ fontSize:11, color:'#9ca3af' }}>Waiting for query…</p>
+          : timeline.map((t,i) => (
+            <div key={i} style={{ fontSize:11, borderRadius:6, padding:'4px 8px', marginBottom:4,
+              background: t.type==='error'?'#fef2f2':t.type==='retry'?'#fef3c7':t.type==='cache'||t.type==='done'?'#f0fdf4':'#f9fafb',
+              color: t.type==='error'?'#b91c1c':t.type==='retry'?'#92400e':t.type==='cache'||t.type==='done'?'#15803d':'#374151',
+              border:'1px solid #f3f4f6' }}>
+              {t.label}
             </div>
           ))
         }
-        {retries.length > 0 && (
-          <>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>CRAG Retries</div>
-            {retries.map((r, i) => (
-              <div key={i} style={{ fontSize: 11, background: '#fef3c7', color: '#92400e', borderRadius: 6, padding: '4px 8px', marginBottom: 4 }}>
-                Attempt #{r.attempt} · score {r.score?.toFixed(2)}
-              </div>
-            ))}
-          </>
-        )}
-        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Legend</div>
+
+        <div style={{ marginTop:20, paddingTop:16, borderTop:'1px solid #e5e7eb' }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>Optimizations</div>
           {[
-            ['#d1d5db', 'Pending'],
-            ['#818cf8', 'Active'],
-            ['#22c55e', 'Done'],
-            ['#facc15', 'Skipped'],
-            ['#ef4444', 'Blocked'],
-          ].map(([color, label]) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: '#6b7280' }}>{label}</span>
+            ['⚡', 'Cache before domain check'],
+            ['∥',  'ChromaDB ∥ BM25 parallel'],
+            ['🔄', 'CRAG retry on low score'],
+            ['⟳',  'Async pipeline (non-blocking)'],
+          ].map(([icon, label]) => (
+            <div key={label} style={{ display:'flex', gap:8, marginBottom:8, alignItems:'flex-start' }}>
+              <span style={{ fontSize:12, flexShrink:0 }}>{icon}</span>
+              <span style={{ fontSize:10, color:'#6b7280', lineHeight:1.4 }}>{label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid #e5e7eb' }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Legend</div>
+          {[['#d1d5db','Pending'],['#818cf8','Active'],['#22c55e','Done'],['#facc15','Skipped'],['#ef4444','Blocked']].map(([c,l])=>(
+            <div key={l} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:c, flexShrink:0 }} />
+              <span style={{ fontSize:11, color:'#6b7280' }}>{l}</span>
             </div>
           ))}
         </div>
