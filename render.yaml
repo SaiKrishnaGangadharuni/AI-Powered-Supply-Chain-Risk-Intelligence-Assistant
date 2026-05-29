@@ -25,6 +25,7 @@ services:
   - type: web
     name: scria-backend
     runtime: python
+    pythonVersion: "3.11.9"
     region: oregon
     plan: starter          # upgrade to standard for production
 
