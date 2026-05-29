@@ -1,0 +1,140 @@
+# =============================================================
+# Render deployment configuration
+# Supply Chain Risk Intelligence Assistant
+# =============================================================
+#
+# Services:
+#   1. backend  — FastAPI (Python, uvicorn), with persistent disk
+#   2. frontend — React/Vite static site
+#
+# Persistent disk mounts at /opt/render/project/src/storage
+# ChromaDB and SQLite checkpointer write to this disk.
+#
+# Before first deploy:
+#   1. Set all environment variables listed under envVars (sensitive ones
+#      must be added via Render Dashboard → Environment, not here).
+#   2. Connect your GitHub repo in Render Dashboard.
+#   3. Deploy backend first; copy its URL into VITE_API_URL for frontend.
+# =============================================================
+
+services:
+
+  # -----------------------------------------------------------
+  # Backend: FastAPI
+  # -----------------------------------------------------------
+  - type: web
+    name: scria-backend
+    runtime: python
+    region: oregon
+    plan: starter          # upgrade to standard for production
+
+    rootDir: .             # requirements.txt is at repo root
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+    startCommand: >
+      uvicorn backend.app.main:app
+      --host 0.0.0.0
+      --port $PORT
+      --workers 1
+      --timeout-keep-alive 75
+
+    healthCheckPath: /health
+
+    # Persistent disk — keeps ChromaDB vectors + SQLite state across deploys
+    disk:
+      name: scria-storage
+      mountPath: /opt/render/project/src/storage
+      sizeGB: 5            # increase if vector store grows
+
+    envVars:
+      # --- LLM ---
+      - key: OPENAI_API_KEY
+        sync: false        # set in Render Dashboard (secret)
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL_SMALL
+        value: llama-3.1-8b-instant
+      - key: GROQ_MODEL_LARGE
+        value: llama-3.3-70b-versatile
+
+      # --- Embeddings ---
+      - key: EMBEDDING_MODEL
+        value: BAAI/bge-small-en-v1.5
+      - key: EMBEDDING_DIM
+        value: "384"
+      - key: RERANKER_MODEL
+        value: cross-encoder/ms-marco-MiniLM-L-6-v2
+      - key: HUGGINGFACE_TOKEN
+        sync: false
+
+      # --- Vector store (persistent disk path) ---
+      - key: CHROMA_PERSIST_DIR
+        value: /opt/render/project/src/storage/chroma
+      - key: CHROMA_COLLECTION
+        value: supply_chain_incidents
+
+      # --- SQLite checkpointer (persistent disk) ---
+      - key: DATABASE_URL
+        value: sqlite:////opt/render/project/src/storage/checkpointer.db
+
+      # --- LangSmith tracing ---
+      - key: LANGCHAIN_TRACING_V2
+        value: "true"
+      - key: LANGCHAIN_ENDPOINT
+        value: https://api.smith.langchain.com
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      - key: LANGCHAIN_PROJECT
+        value: supply-chain-risk-assistant
+
+      # --- Kaggle ---
+      - key: KAGGLE_USERNAME
+        sync: false
+      - key: KAGGLE_KEY
+        sync: false
+
+      # --- CORS: allow Render frontend domain ---
+      # Replace with your actual frontend URL after first deploy
+      - key: CORS_ORIGINS
+        value: https://scria-frontend.onrender.com,http://localhost:5173
+
+      # --- Cache tuning ---
+      - key: SEMANTIC_CACHE_THRESHOLD
+        value: "0.92"
+      - key: SEMANTIC_CACHE_MAX_ITEMS
+        value: "500"
+
+  # -----------------------------------------------------------
+  # Frontend: React + Vite static site
+  # -----------------------------------------------------------
+  - type: web
+    name: scria-frontend
+    runtime: static
+    region: oregon
+    plan: free
+
+    rootDir: frontend
+
+    buildCommand: |
+      npm ci
+      npm run build
+
+    staticPublishPath: ./dist
+
+    # SPA routing: all paths → index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    envVars:
+      # Set to your Render backend URL (e.g. https://scria-backend.onrender.com)
+      - key: VITE_API_BASE_URL
+        sync: false        # e.g. https://scria-backend.onrender.com
+      - key: VITE_WS_BASE_URL
+        sync: false        # e.g. wss://scria-backend.onrender.com
