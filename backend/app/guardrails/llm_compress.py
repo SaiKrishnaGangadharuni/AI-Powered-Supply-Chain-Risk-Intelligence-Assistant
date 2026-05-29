@@ -3,16 +3,35 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-import tiktoken
-
 from app.core.config import settings
 from app.core.logging import logger
 
-_enc = tiktoken.get_encoding("cl100k_base")
+_enc = None
+_enc_loaded = False
+
+
+def _get_enc():
+    """Lazily load the tiktoken encoding. Returns None if unavailable
+    (e.g. offline / restricted network) so callers fall back gracefully."""
+    global _enc, _enc_loaded
+    if not _enc_loaded:
+        _enc_loaded = True
+        try:
+            import tiktoken
+
+            _enc = tiktoken.get_encoding("cl100k_base")
+        except Exception as e:  # network blocked, missing cache, etc.
+            logger.warning(f"tiktoken unavailable, using word-count fallback: {e}")
+            _enc = None
+    return _enc
 
 
 def _token_count(text: str) -> int:
-    return len(_enc.encode(text or ""))
+    enc = _get_enc()
+    if enc is not None:
+        return len(enc.encode(text or ""))
+    # Fallback: ~1.3 tokens per whitespace-delimited word
+    return int(len((text or "").split()) * 1.3) + 1
 
 
 def compress(
@@ -39,13 +58,18 @@ def compress(
             # Partial fit: take as many tokens as remain
             remaining = cap - used
             if remaining > 50:  # only add if meaningfully non-empty
-                ids = _enc.encode(ctx)
-                parts.append(_enc.decode(ids[:remaining]))
+                enc = _get_enc()
+                if enc is not None:
+                    ids = enc.encode(ctx)
+                    parts.append(enc.decode(ids[:remaining]))
+                else:
+                    # Fallback: approximate token->char ratio (~4 chars/token)
+                    parts.append(ctx[: remaining * 4])
             break
         parts.append(ctx)
         used += chunk_tokens
 
     result = "\n\n".join(parts)
     if used > cap:
-        logger.info(f"Context truncated: {used} → {cap} tokens")
+        logger.info(f"Context truncated: {used} -> {cap} tokens")
     return result

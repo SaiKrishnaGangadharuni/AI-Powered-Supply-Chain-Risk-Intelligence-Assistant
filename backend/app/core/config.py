@@ -30,8 +30,10 @@ class Settings(BaseSettings):
     llm_fallback_chain: str = "openai_mini,groq_large,groq_small"
 
     # ---- Embeddings / Reranker ----
+    embedding_provider: str = "openai"  # "openai" | "fastembed" (local ONNX fallback)
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 1536
+    fastembed_model: str = "BAAI/bge-small-en-v1.5"  # used when embedding_provider=fastembed (384-dim)
     reranker_model: str = "cosine"  # cross-encoder replaced with cosine; no torch needed
     huggingface_token: str = ""
 

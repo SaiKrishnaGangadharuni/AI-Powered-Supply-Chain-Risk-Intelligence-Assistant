@@ -35,7 +35,8 @@ services:
       pip install -r requirements.txt
 
     startCommand: >
-      uvicorn backend.app.main:app
+      uvicorn app.main:app
+      --app-dir backend
       --host 0.0.0.0
       --port $PORT
       --workers 1
@@ -66,12 +67,14 @@ services:
         value: llama-3.3-70b-versatile
 
       # --- Embeddings ---
+      - key: EMBEDDING_PROVIDER
+        value: openai          # set to 'fastembed' for local no-key embeddings (then EMBEDDING_DIM=384, re-ingest)
       - key: EMBEDDING_MODEL
-        value: BAAI/bge-small-en-v1.5
+        value: text-embedding-3-small
       - key: EMBEDDING_DIM
-        value: "384"
+        value: "1536"
       - key: RERANKER_MODEL
-        value: cross-encoder/ms-marco-MiniLM-L-6-v2
+        value: cosine
       - key: HUGGINGFACE_TOKEN
         sync: false
 
@@ -136,8 +139,8 @@ services:
         destination: /index.html
 
     envVars:
-      # Set to your Render backend URL (e.g. https://scria-backend.onrender.com)
+      # Backend URL — replace with your actual Render backend URL after first deploy
       - key: VITE_API_BASE_URL
-        sync: false        # e.g. https://scria-backend.onrender.com
+        value: https://scria-backend.onrender.com
       - key: VITE_WS_BASE_URL
-        sync: false        # e.g. wss://scria-backend.onrender.com
+        value: wss://scria-backend.onrender.com

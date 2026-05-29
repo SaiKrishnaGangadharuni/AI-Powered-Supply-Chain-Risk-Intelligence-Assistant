@@ -12,6 +12,7 @@ answer is composed.
 """
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
 
@@ -86,7 +87,10 @@ def build_graph(checkpointer: Optional[Any] = None):
     if checkpointer is None:
         ckpt_path = settings.resolve(settings.langgraph_checkpoint_db)
         ckpt_path.parent.mkdir(parents=True, exist_ok=True)
-        checkpointer = SqliteSaver.from_conn_string(str(ckpt_path))
+        # from_conn_string() is a context manager in current langgraph; the graph
+        # is a long-lived singleton, so build a persistent saver from a direct conn.
+        conn = sqlite3.connect(str(ckpt_path), check_same_thread=False)
+        checkpointer = SqliteSaver(conn)
 
     interrupt = ["recommendation"] if settings.high_severity_interrupt else []
 
@@ -94,7 +98,7 @@ def build_graph(checkpointer: Optional[Any] = None):
         checkpointer=checkpointer,
         interrupt_before=interrupt,  # honored only when severity==HIGH at runtime
     )
-    logger.info("LangGraph compiled (interrupt_before=%s)", interrupt)
+    logger.info(f"LangGraph compiled (interrupt_before={interrupt})")
     return compiled
 
 
