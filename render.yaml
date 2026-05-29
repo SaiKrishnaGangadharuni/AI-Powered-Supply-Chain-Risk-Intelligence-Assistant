@@ -24,8 +24,7 @@ services:
   # -----------------------------------------------------------
   - type: web
     name: scria-backend
-    runtime: python
-    pythonVersion: "3.11.9"
+    env: python
     region: oregon
     plan: starter          # upgrade to standard for production
 
@@ -51,6 +50,9 @@ services:
       sizeGB: 5            # increase if vector store grows
 
     envVars:
+      # --- Python version (forces 3.11; runtime.txt is the primary signal) ---
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       # --- LLM ---
       - key: OPENAI_API_KEY
         sync: false        # set in Render Dashboard (secret)
