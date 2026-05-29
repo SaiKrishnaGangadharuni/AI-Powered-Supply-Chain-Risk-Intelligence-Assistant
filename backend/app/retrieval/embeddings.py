@@ -1,43 +1,38 @@
-"""Sentence-Transformer wrapper for bge-small-en-v1.5 (384-dim, free)."""
+"""OpenAI text-embedding-3-small wrapper (1536-dim, replaces local BAAI model)."""
 from __future__ import annotations
 
-from threading import Lock
-from typing import List, Optional
+from typing import List
+
+from openai import OpenAI
 
 from app.core.config import settings
 from app.core.logging import logger
 
-_model = None
-_lock = Lock()
+_client: OpenAI | None = None
 
 
-def _get_model():
-    global _model
-    if _model is not None:
-        return _model
-    with _lock:
-        if _model is None:
-            from sentence_transformers import SentenceTransformer
-
-            logger.info(f"Loading embedding model: {settings.embedding_model}")
-            _model = SentenceTransformer(settings.embedding_model)
-    return _model
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=settings.openai_api_key)
+    return _client
 
 
-def embed_texts(texts: List[str], batch_size: Optional[int] = None) -> List[List[float]]:
-    """Embed a batch of texts; returns list-of-lists for ChromaDB compatibility."""
+def embed_texts(texts: List[str], batch_size: int = 100) -> List[List[float]]:
+    """Embed texts using OpenAI text-embedding-3-small. Returns list-of-lists."""
     if not texts:
         return []
-    model = _get_model()
-    bs = batch_size or settings.incident_doc_batch_size
-    arr = model.encode(
-        texts,
-        batch_size=bs,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-        convert_to_numpy=True,
-    )
-    return arr.tolist()
+    client = _get_client()
+    results: List[List[float]] = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        resp = client.embeddings.create(
+            model=settings.embedding_model,
+            input=batch,
+        )
+        results.extend([d.embedding for d in resp.data])
+    logger.debug(f"Embedded {len(texts)} texts via {settings.embedding_model}")
+    return results
 
 
 def embed_query(text: str) -> List[float]:

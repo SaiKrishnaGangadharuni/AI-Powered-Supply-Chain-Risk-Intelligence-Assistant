@@ -1,8 +1,6 @@
 # =============================================================
 # Backend dependencies
 # =============================================================
-# PyTorch CPU-only wheels (Render Linux amd64 — avoids CUDA/platform mismatches)
---extra-index-url https://download.pytorch.org/whl/cpu
 
 # --- Web framework ---
 fastapi==0.115.6
@@ -31,12 +29,6 @@ langgraph-checkpoint==2.0.6
 langgraph-checkpoint-sqlite==2.0.1
 langsmith==0.1.143
 
-# --- Embeddings / Reranking ---
-sentence-transformers==3.3.1
-torch==2.5.1+cpu
-transformers==4.46.3
-huggingface-hub==0.26.5
-
 # --- Vector store + Sparse ---
 chromadb==0.5.20
 rank-bm25==0.2.2
@@ -44,9 +36,6 @@ rank-bm25==0.2.2
 # --- Data ---
 pandas==2.2.3
 numpy==1.26.4
-
-# --- Context compression ---
-llmlingua==0.2.2
 
 # --- DB / cache ---
 aiosqlite==0.20.0

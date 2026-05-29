@@ -1,27 +1,18 @@
-"""Cross-encoder reranker (cross-encoder/ms-marco-MiniLM-L-6-v2, free)."""
+"""Cosine similarity reranker (replaces cross-encoder; no torch required)."""
 from __future__ import annotations
 
-from threading import Lock
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 from app.core.config import settings
-from app.core.logging import logger
-
-_model = None
-_lock = Lock()
+from app.retrieval.embeddings import embed_query
 
 
-def _get_model():
-    global _model
-    if _model is not None:
-        return _model
-    with _lock:
-        if _model is None:
-            from sentence_transformers import CrossEncoder
-
-            logger.info(f"Loading reranker model: {settings.reranker_model}")
-            _model = CrossEncoder(settings.reranker_model)
-    return _model
+def _cosine(a: List[float], b: List[float]) -> float:
+    va, vb = np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
+    na, nb = np.linalg.norm(va), np.linalg.norm(vb)
+    return float(np.dot(va, vb) / (na * nb)) if na > 0 and nb > 0 else 0.0
 
 
 def rerank(
@@ -29,18 +20,26 @@ def rerank(
     candidates: List[Dict[str, Any]],
     top_k: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Score (query, doc) pairs with the cross-encoder; return top-k sorted desc.
+    """
+    Rerank candidates by cosine similarity between query embedding and
+    pre-computed document embeddings (from 'embedding' key) or re-embed
+    document text on the fly.
 
-    Each candidate dict must have a `text` key. We add a `rerank_score` and
-    preserve the original `score` from upstream retrieval.
+    Adds 'rerank_score' to each candidate; preserves original 'score'.
     """
     if not candidates:
         return []
-    model = _get_model()
-    pairs = [(query, c.get("text", "")) for c in candidates]
-    scores = model.predict(pairs, show_progress_bar=False)
-    for c, s in zip(candidates, scores):
-        c["rerank_score"] = float(s)
+
+    q_emb = embed_query(query)
+    for c in candidates:
+        if "embedding" in c and c["embedding"]:
+            c["rerank_score"] = _cosine(q_emb, c["embedding"])
+        else:
+            # Re-embed doc text if no cached embedding
+            from app.retrieval.embeddings import embed_texts
+            doc_emb = embed_texts([c.get("text", "")])[0]
+            c["rerank_score"] = _cosine(q_emb, doc_emb)
+
     candidates.sort(key=lambda c: c.get("rerank_score", 0.0), reverse=True)
     k = top_k or settings.rerank_top_k
     return candidates[:k]
