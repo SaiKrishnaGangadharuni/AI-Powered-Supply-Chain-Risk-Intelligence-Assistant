@@ -16,17 +16,25 @@ const NODE_TO_ID = {
 const ChatContext = createContext(null)
 
 export function ChatProvider({ children }) {
-  const [messages,   setMessages]   = useState([])
-  const [sending,    setSending]    = useState(false)
-  const [liveStatus, setLiveStatus] = useState('')
-  const [sessionId]                 = useState(() => uid())
-  const [nodeStatus, setNodeStatus] = useState({})
-  const [timeline,   setTimeline]   = useState([])
+  const [messages,    setMessages]    = useState([])
+  const [sending,     setSending]     = useState(false)
+  const [liveStatus,  setLiveStatus]  = useState('')
+  const [sessionId]                   = useState(() => uid())
+  const [nodeStatus,  setNodeStatus]  = useState({})
+  const [timeline,    setTimeline]    = useState([])
+  const [runMetrics,  setRunMetrics]  = useState(null)
+  const runStartRef = useRef(null)
   const wsRef = useRef(null)
 
-  const markNode   = (id, status) => setNodeStatus((p) => ({ ...p, [id]: status }))
-  const addTimeline = (label, type = 'node') => setTimeline((p) => [...p, { label, type }])
-  const resetPipeline = () => { setNodeStatus({}); setTimeline([]) }
+  const markNode    = (id, status) => setNodeStatus((p) => ({ ...p, [id]: status }))
+  const addTimeline = (label, type = 'node') => setTimeline((p) => [...p, { label, type, t: Date.now() }])
+  const resetPipeline = () => {
+    setNodeStatus({})
+    setTimeline([])
+    setRunMetrics(null)
+    runStartRef.current = Date.now()
+  }
+  const patchMetrics = (patch) => setRunMetrics((p) => ({ ...(p || {}), ...patch }))
 
   useEffect(() => {
     const connect = () => {
@@ -62,10 +70,10 @@ export function ChatProvider({ children }) {
             markNode(stepId, 'active')
             setLiveStatus(`Running: ${node.replace(/_/g, ' ')}…`)
             addTimeline(`Running: ${node.replace(/_/g, ' ')}`, 'node')
-            // mark previous pipeline node done
+            // mark all preceding pipeline nodes done
             const pipelineOrder = ['orchestrator','supplier_risk','shipment','inventory','recommendation']
             const idx = pipelineOrder.indexOf(stepId)
-            if (idx > 0) markNode(pipelineOrder[idx - 1], 'done')
+            for (let i = 0; i < idx; i++) markNode(pipelineOrder[i], 'done')
           }
 
           setMessages((m) => {
@@ -79,6 +87,29 @@ export function ChatProvider({ children }) {
             return next
           })
 
+        } else if (data.type === 'retrieval') {
+          markNode('retrieval', 'active')
+          setLiveStatus(`Retrieval: ${data.docs ?? 0} docs (${data.elapsed_ms ?? 0}ms)`)
+          addTimeline(`Retrieval: ${data.docs ?? 0} docs`, 'node')
+          if (data.reformulated_from) addTimeline(`CRAG reformulated query`, 'retry')
+          patchMetrics({
+            retrieval_docs: data.docs ?? 0,
+            retrieval_score: data.max_score ?? null,
+            retrieval_ms: data.elapsed_ms ?? null,
+            crag_reformulated: !!(data.reformulated_from),
+          })
+
+        } else if (data.type === 'crag_retry') {
+          markNode('rerank', 'active')
+          addTimeline(`CRAG retry #${data.attempt} (score ${data.score?.toFixed(2)})`, 'retry')
+          setLiveStatus(`CRAG retry #${data.attempt}…`)
+          setRunMetrics((p) => ({ ...(p || {}), crag_retries: ((p?.crag_retries) || 0) + 1, crag_last_score: data.score ?? null }))
+
+        } else if (data.type === 'faithfulness') {
+          markNode('retrieval', 'done')
+          markNode('rerank',    'done')
+          patchMetrics({ faithful: data.faithful, pii_redacted: data.pii_redacted ?? false, faithful_reason: data.reason ?? null })
+
         } else if (data.type === 'guard_block') {
           markNode('guard_in', 'error')
           addTimeline(`Blocked: ${data.detail}`, 'error')
@@ -88,7 +119,7 @@ export function ChatProvider({ children }) {
             for (let i = next.length - 1; i >= 0; i--) {
               if (next[i].role === 'assistant' && next[i].streaming) {
                 next[i] = { ...next[i], streaming: false,
-                  content: `I can't help with that: ${data.detail}`, severity: 'LOW' }
+                  content: `I'm specialized in supply chain risk intelligence. I can help with supplier risks, shipment delays, inventory anomalies, procurement issues, and logistics disruptions. Could you rephrase your question around one of those areas?`, severity: 'LOW' }
                 break
               }
             }
@@ -107,6 +138,7 @@ export function ChatProvider({ children }) {
           )
           addTimeline('Cache hit — full pipeline skipped ⚡', 'cache')
           setLiveStatus('Cache hit ⚡')
+          patchMetrics({ cache_hit: true, severity: data.severity })
           setMessages((m) => {
             const next = [...m]
             for (let i = next.length - 1; i >= 0; i--) {
@@ -128,6 +160,12 @@ export function ChatProvider({ children }) {
           markNode('hilt', data.needs_human ? 'active' : 'done')
           addTimeline('Final answer ready ✓', 'done')
           setLiveStatus('Done ✓')
+          patchMetrics({
+            severity: data.severity,
+            needs_human: !!data.needs_human,
+            elapsed_total: runStartRef.current ? Date.now() - runStartRef.current : null,
+            cache_hit: false,
+          })
           setMessages((m) => {
             const next = [...m]
             for (let i = next.length - 1; i >= 0; i--) {
@@ -142,11 +180,6 @@ export function ChatProvider({ children }) {
           })
           setSending(false)
           setTimeout(() => setLiveStatus(''), 3000)
-
-        } else if (data.type === 'crag_retry') {
-          markNode('rerank', 'active')
-          addTimeline(`CRAG retry #${data.attempt} (score ${data.score?.toFixed(2)})`, 'retry')
-          setLiveStatus(`CRAG retry #${data.attempt}…`)
 
         } else if (data.type === 'error') {
           setLiveStatus('')
@@ -201,7 +234,7 @@ export function ChatProvider({ children }) {
   }, [sending, sessionId])
 
   return (
-    <ChatContext.Provider value={{ messages, sending, liveStatus, sessionId, nodeStatus, timeline, send }}>
+    <ChatContext.Provider value={{ messages, sending, liveStatus, sessionId, nodeStatus, timeline, runMetrics, send }}>
       {children}
     </ChatContext.Provider>
   )

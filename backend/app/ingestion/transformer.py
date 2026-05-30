@@ -186,7 +186,7 @@ def fashion_row_to_incident(row: pd.Series) -> Dict[str, Any]:
     )
 
     return {
-        "id": _doc_id("fashion", sku),
+        "id": _doc_id("fashion", sku, row.name),  # row.name = index, prevents SKU collision
         "text": text,
         "metadata": {
             "source": "fashion",
@@ -212,6 +212,23 @@ def fashion_row_to_incident(row: pd.Series) -> Dict[str, Any]:
     }
 
 
+# ---------------- Generic transformer (custom CSVs) ----------------
+def generic_row_to_incident(row: pd.Series) -> Dict[str, Any]:
+    """Fallback transformer for any CSV — converts all columns to a readable doc."""
+    idx = row.name  # integer row index — guarantees unique IDs
+    fields = {k: _s(v) for k, v in row.items() if _s(v) not in ("unknown", "", "nan")}
+    text = "; ".join(f"{k}: {v}" for k, v in list(fields.items())[:30])  # cap at 30 fields
+    return {
+        "id": _doc_id("custom", idx, text[:64]),
+        "text": text,
+        "metadata": {
+            "source": "custom",
+            "row_index": int(idx),
+            **{k: v for k, v in list(fields.items())[:20]},  # store first 20 as metadata
+        },
+    }
+
+
 # ---------------- Batch driver ----------------
 def transform_dataframe(df: pd.DataFrame, source: str) -> List[Dict[str, Any]]:
     """Apply the right per-row transformer based on source name."""
@@ -220,7 +237,9 @@ def transform_dataframe(df: pd.DataFrame, source: str) -> List[Dict[str, Any]]:
     elif source == "fashion":
         fn = fashion_row_to_incident
     else:
-        raise ValueError(f"Unknown source: {source}")
+        # custom CSV or unknown — use generic transformer
+        logger.info(f"Using generic transformer for source='{source}'")
+        fn = generic_row_to_incident
 
     docs: List[Dict[str, Any]] = []
     for _, row in df.iterrows():

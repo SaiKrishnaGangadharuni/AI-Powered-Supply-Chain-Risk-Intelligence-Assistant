@@ -64,7 +64,7 @@ async def _flush_events(ws: WebSocket, session_id: str) -> None:
     for ev in event_bus.drain(session_id):
         inner = dict(ev)
         kind = inner.pop("type", "unknown")
-        await ws.send_text(json.dumps({"type": "event", "event_type": kind, **inner}))
+        await ws.send_text(json.dumps({"type": kind, **inner}))
 
 
 # ── REST endpoint ──────────────────────────────────────────────────────────

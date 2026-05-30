@@ -31,11 +31,18 @@ _GREETING_RE = re.compile(
 )
 
 # ── Supply-chain keyword fast-pass (skip LLM domain check) ────────────────
+# Fast-pass: ONLY unambiguously supply-chain-specific terms.
+# Generic words (data, transport, our, show, country, cost, list, etc.) are intentionally
+# excluded — they match too broadly and let off-topic queries bypass the LLM domain check.
 _DOMAIN_KEYWORDS_RE = re.compile(
-    r"\b(supplier|supply chain|shipment|shipping|inventory|warehouse|delivery|"
-    r"freight|logistics|procurement|vendor|stockout|demand|order|customs|"
-    r"disruption|risk|lead time|fulfilment|fulfillment|transit|cargo|sku|"
-    r"late deliver|delay|anomal)\b",
+    r"\b(supply chain|shipment|shipping|inventory|warehouse|freight|logistics|"
+    r"procurement|vendor|stockout|lead time|fulfilment|fulfillment|transit|cargo|"
+    r"sku|late deliver|late delivery|delivery status|delivery risk|"
+    r"demand forecast|order fulfil|customs clearance|port congestion|"
+    r"disruption|supplier risk|supplier performance|bm25|rerank|"
+    r"overstock|out of stock|safety stock|reorder|backorder|"
+    r"carrier performance|shipping mode|shipping cost|shipping delay|"
+    r"supply disruption|supplier failure|supply chain risk)\b",
     re.IGNORECASE,
 )
 

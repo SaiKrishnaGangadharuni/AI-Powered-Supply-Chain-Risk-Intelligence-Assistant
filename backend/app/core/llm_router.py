@@ -4,7 +4,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -61,8 +61,9 @@ class LLMRouter:
             client = ChatOpenAI(
                 model=settings.openai_model,
                 api_key=settings.openai_api_key or None,
+                base_url=settings.openai_base_url or None,
                 temperature=0.2,
-                timeout=60,
+                timeout=8,      # fail fast → Groq fallback kicks in quickly
                 max_retries=0,  # we handle retry/fallback ourselves
             )
         elif provider == LLMProvider.GROQ_LARGE:
@@ -106,8 +107,7 @@ class LLMRouter:
         return chain
 
     @retry(
-        stop=stop_after_attempt(2),
-        wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+        stop=stop_after_attempt(1),   # no per-provider retry — fall through to next provider fast
         retry=retry_if_exception_type(Exception),
         reraise=True,
     )

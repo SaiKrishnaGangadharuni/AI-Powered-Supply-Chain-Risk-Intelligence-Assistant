@@ -57,6 +57,8 @@ services:
       # --- LLM ---
       - key: OPENAI_API_KEY
         sync: false        # set in Render Dashboard (secret)
+      - key: OPENAI_BASE_URL
+        sync: false        # optional gateway e.g. https://keygateway.arshnivlabs.com (leave blank for default OpenAI)
       - key: OPENAI_MODEL
         value: gpt-4o-mini
       - key: GROQ_API_KEY

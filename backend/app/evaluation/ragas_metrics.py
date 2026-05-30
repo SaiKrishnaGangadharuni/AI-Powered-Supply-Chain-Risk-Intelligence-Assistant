@@ -159,7 +159,13 @@ def _set_ragas_llm(model: str) -> None:
         from ragas import RunConfig
         from ragas.llms import LangchainLLMWrapper
 
-        llm = LangchainLLMWrapper(ChatOpenAI(model=model, temperature=0))
+        from app.core.config import settings
+        llm = LangchainLLMWrapper(ChatOpenAI(
+            model=model,
+            temperature=0,
+            api_key=settings.openai_api_key or None,
+            base_url=settings.openai_base_url or None,
+        ))
         # Store for metrics that support it
         os.environ["RAGAS_LLM_MODEL"] = model
     except Exception:

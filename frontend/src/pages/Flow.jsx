@@ -27,14 +27,14 @@ function Node({ label, sub, color, status, badge, width = 190 }) {
   return (
     <div style={{ background: bg, border: `2px solid ${border}`, borderRadius: 12,
       padding: '9px 13px', width, boxShadow: shadow, transition: 'all 0.3s',
-      opacity: isSkip ? 0.45 : 1, position: 'relative', flexShrink: 0 }}>
+      opacity: isSkip ? 0.45 : 1, position: 'relative', flexShrink: 0, textAlign: 'center' }}>
       <div style={{ position:'absolute', top:8, right:8, width:8, height:8, borderRadius:'50%',
         background: isDone?'#22c55e':isError?'#ef4444':isActive?c.border:'#d1d5db',
         boxShadow: isActive?`0 0 6px ${c.border}`:'none',
         animation: isActive?'pulse 1.2s ease-in-out infinite':'none' }} />
-      <div style={{ fontSize:12, fontWeight:600, paddingRight:14,
+      <div style={{ fontSize:12, fontWeight:600, textAlign:'center',
         color: isDone?'#15803d':isError?'#b91c1c':isActive?c.text:'#374151' }}>{label}</div>
-      {sub  && <div style={{ fontSize:10, color:'#9ca3af', marginTop:2, lineHeight:1.4 }}>{sub}</div>}
+      {sub  && <div style={{ fontSize:10, color:'#9ca3af', marginTop:2, lineHeight:1.4, textAlign:'center' }}>{sub}</div>}
       {badge && <div style={{ marginTop:4, fontSize:9, background:'#fef3c7', color:'#92400e',
         borderRadius:4, padding:'1px 6px', display:'inline-block' }}>{badge}</div>}
     </div>
@@ -137,8 +137,54 @@ function AgentFanOut({ s }) {
   )
 }
 
+function QualityScore({ metrics }) {
+  if (!metrics) return null
+  // Score: faithfulness 40pts + retrieval score 30pts + no-crag-retry 20pts + no-pii 10pts
+  const faith    = metrics.faithful === true ? 40 : metrics.faithful === false ? 0 : null
+  const retScore = metrics.retrieval_score != null ? Math.round(metrics.retrieval_score * 30) : null
+  const cragBonus = metrics.crag_retries > 0 ? 0 : (metrics.retrieval_docs > 0 ? 20 : null)
+  const piiBonus  = metrics.pii_redacted === false ? 10 : metrics.pii_redacted === true ? 5 : null
+  if (faith === null && retScore === null) return null
+  const total = (faith ?? 0) + (retScore ?? 0) + (cragBonus ?? 0) + (piiBonus ?? 0)
+  const color = total >= 80 ? '#15803d' : total >= 55 ? '#b45309' : '#b91c1c'
+  const bg    = total >= 80 ? '#f0fdf4' : total >= 55 ? '#fffbeb' : '#fef2f2'
+  const ring  = total >= 80 ? '#4ade80' : total >= 55 ? '#fbbf24' : '#f87171'
+  return (
+    <div style={{ background: bg, border: `2px solid ${ring}`, borderRadius: 12, padding: '10px 12px', marginBottom: 12, textAlign: 'center' }}>
+      <div style={{ fontSize: 28, fontWeight: 800, color, lineHeight: 1 }}>{total}<span style={{ fontSize: 12 }}>/100</span></div>
+      <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>Quality Score</div>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+        {faith != null && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: faith===40?'#dcfce7':'#fee2e2', color: faith===40?'#166534':'#991b1b' }}>Faith {faith}pts</span>}
+        {retScore != null && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#eff6ff', color: '#1e40af' }}>Ret {retScore}pts</span>}
+        {cragBonus != null && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: cragBonus===20?'#f0fdf4':'#fef3c7', color: cragBonus===20?'#166534':'#92400e' }}>CRAG {cragBonus}pts</span>}
+        {piiBonus != null && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#f5f3ff', color: '#6b21a8' }}>PII {piiBonus}pts</span>}
+      </div>
+      {metrics.faithful_reason && metrics.faithful_reason !== 'no-context-skip' && (
+        <div style={{ marginTop: 8, fontSize: 10, color: metrics.faithful ? '#166534' : '#991b1b',
+          background: metrics.faithful ? '#f0fdf4' : '#fff1f2',
+          border: `1px solid ${metrics.faithful ? '#bbf7d0' : '#fecdd3'}`,
+          borderRadius: 8, padding: '6px 8px', textAlign: 'left', lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 700 }}>Why: </span>{metrics.faithful_reason}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MetricRow({ label, value, sub, color }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 7 }}>
+      <span style={{ fontSize: 10, color: '#6b7280', lineHeight: 1.4 }}>{label}</span>
+      <div style={{ textAlign: 'right' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: color || '#374151' }}>{value}</span>
+        {sub && <div style={{ fontSize: 9, color: '#9ca3af' }}>{sub}</div>}
+      </div>
+    </div>
+  )
+}
+
 export default function Flow() {
-  const { messages, liveStatus, nodeStatus: ns_ctx, timeline, } = useChatContext()
+  const { messages, liveStatus, nodeStatus: ns_ctx, timeline, runMetrics } = useChatContext()
   const [ns, setNs] = useState({})
 
   useEffect(() => { setNs(ns_ctx || {}) }, [ns_ctx])
@@ -214,44 +260,117 @@ export default function Flow() {
       </div>
 
       {/* ── Right panel ── */}
-      <div style={{ width:220, borderLeft:'1px solid #e5e7eb', background:'#fff', padding:'20px 16px', overflowY:'auto', flexShrink:0 }}>
-        <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>Live Timeline</div>
-        {liveStatus && (
-          <div style={{ fontSize:11, color:'#4f46e5', background:'#eef2ff', borderRadius:6, padding:'4px 8px', marginBottom:8 }}>{liveStatus}</div>
-        )}
-        {timeline.length===0
-          ? <p style={{ fontSize:11, color:'#9ca3af' }}>Waiting for query…</p>
-          : timeline.map((t,i) => (
-            <div key={i} style={{ fontSize:11, borderRadius:6, padding:'4px 8px', marginBottom:4,
-              background: t.type==='error'?'#fef2f2':t.type==='retry'?'#fef3c7':t.type==='cache'||t.type==='done'?'#f0fdf4':'#f9fafb',
-              color: t.type==='error'?'#b91c1c':t.type==='retry'?'#92400e':t.type==='cache'||t.type==='done'?'#15803d':'#374151',
-              border:'1px solid #f3f4f6' }}>
-              {t.label}
-            </div>
-          ))
+      <div style={{ width:236, borderLeft:'1px solid #e5e7eb', background:'#fff', padding:'16px 14px', overflowY:'auto', flexShrink:0 }}>
+
+        {/* Quality score card */}
+        <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Run Quality</div>
+        {runMetrics
+          ? <QualityScore metrics={runMetrics} />
+          : <div style={{ fontSize:11, color:'#9ca3af', marginBottom:12 }}>No run yet</div>
         }
 
-        <div style={{ marginTop:20, paddingTop:16, borderTop:'1px solid #e5e7eb' }}>
-          <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>Optimizations</div>
+        {/* Evaluation metrics */}
+        {runMetrics && (
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Evaluation</div>
+            <MetricRow
+              label="Faithfulness"
+              value={runMetrics.faithful === true ? '✓ Passed' : runMetrics.faithful === false ? '✗ Failed' : '—'}
+              color={runMetrics.faithful === true ? '#15803d' : runMetrics.faithful === false ? '#b91c1c' : '#9ca3af'}
+            />
+            <MetricRow
+              label="PII Detected"
+              value={runMetrics.pii_redacted === true ? '⚠ Redacted' : runMetrics.pii_redacted === false ? '✓ Clean' : '—'}
+              color={runMetrics.pii_redacted ? '#b45309' : '#15803d'}
+            />
+            <MetricRow
+              label="Severity"
+              value={runMetrics.severity || '—'}
+              color={runMetrics.severity==='HIGH'?'#b91c1c':runMetrics.severity==='MEDIUM'?'#b45309':'#15803d'}
+            />
+            {runMetrics.needs_human && (
+              <div style={{ fontSize:10, background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:6, padding:'4px 8px', color:'#9a3412', marginBottom:6 }}>
+                ⚠ HILT: human review required
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Retrieval metrics */}
+        {runMetrics && (
+          <div style={{ marginBottom:12, paddingTop:10, borderTop:'1px solid #f3f4f6' }}>
+            <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Retrieval</div>
+            <MetricRow label="Docs retrieved" value={runMetrics.retrieval_docs ?? '—'} />
+            <MetricRow
+              label="Max rerank score"
+              value={runMetrics.retrieval_score != null ? runMetrics.retrieval_score.toFixed(3) : '—'}
+              color={runMetrics.retrieval_score >= 0.7 ? '#15803d' : runMetrics.retrieval_score >= 0.5 ? '#b45309' : '#b91c1c'}
+            />
+            <MetricRow label="Retrieval time" value={runMetrics.retrieval_ms != null ? `${runMetrics.retrieval_ms}ms` : '—'} color="#6b7280" />
+            <MetricRow
+              label="CRAG retries"
+              value={runMetrics.crag_retries > 0 ? `${runMetrics.crag_retries}× (score ${runMetrics.crag_last_score?.toFixed(2)})` : '0 — first-pass'}
+              color={runMetrics.crag_retries > 0 ? '#b45309' : '#15803d'}
+            />
+            {runMetrics.cache_hit && (
+              <div style={{ fontSize:10, background:'#f5f3ff', border:'1px solid #ddd6fe', borderRadius:6, padding:'4px 8px', color:'#6b21a8' }}>
+                ⚡ Cache hit — pipeline skipped
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Total time */}
+        {runMetrics?.elapsed_total && (
+          <div style={{ marginBottom:12, paddingTop:10, borderTop:'1px solid #f3f4f6' }}>
+            <MetricRow label="Total elapsed" value={`${(runMetrics.elapsed_total/1000).toFixed(2)}s`} color="#0C7063" />
+          </div>
+        )}
+
+        {/* Techniques used */}
+        <div style={{ paddingTop:10, borderTop:'1px solid #f3f4f6' }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Techniques</div>
           {[
-            ['⚡', 'Cache before domain check'],
-            ['∥',  'ChromaDB ∥ BM25 parallel'],
-            ['🔄', 'CRAG retry on low score'],
-            ['⟳',  'Async pipeline (non-blocking)'],
-          ].map(([icon, label]) => (
-            <div key={label} style={{ display:'flex', gap:8, marginBottom:8, alignItems:'flex-start' }}>
-              <span style={{ fontSize:12, flexShrink:0 }}>{icon}</span>
-              <span style={{ fontSize:10, color:'#6b7280', lineHeight:1.4 }}>{label}</span>
+            ['⚡', 'Semantic cache (cosine ≥0.92)', true],
+            ['∥',  'ChromaDB + BM25 parallel', true],
+            ['🔀', 'RRF fusion + cosine rerank', true],
+            ['🔄', 'CRAG adaptive retry', runMetrics?.crag_retries > 0],
+            ['🛡',  'Input + output guardrails', true],
+            ['📊', 'Faithfulness eval (DeepEval)', runMetrics?.faithful != null],
+          ].map(([icon, label, active]) => (
+            <div key={label} style={{ display:'flex', gap:6, marginBottom:6, alignItems:'flex-start', opacity: active ? 1 : 0.35 }}>
+              <span style={{ fontSize:11, flexShrink:0 }}>{icon}</span>
+              <span style={{ fontSize:10, color: active ? '#374151' : '#9ca3af', lineHeight:1.4 }}>{label}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid #e5e7eb' }}>
-          <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Legend</div>
-          {[['#d1d5db','Pending'],['#818cf8','Active'],['#22c55e','Done'],['#facc15','Skipped'],['#ef4444','Blocked']].map(([c,l])=>(
-            <div key={l} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-              <div style={{ width:8, height:8, borderRadius:'50%', background:c, flexShrink:0 }} />
-              <span style={{ fontSize:11, color:'#6b7280' }}>{l}</span>
+        {/* Timeline */}
+        <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginTop:4 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Live Timeline</div>
+          {liveStatus && (
+            <div style={{ fontSize:11, color:'#4f46e5', background:'#eef2ff', borderRadius:6, padding:'4px 8px', marginBottom:6 }}>{liveStatus}</div>
+          )}
+          {timeline.length === 0
+            ? <p style={{ fontSize:11, color:'#9ca3af' }}>Waiting for query…</p>
+            : timeline.map((t,i) => (
+              <div key={i} style={{ fontSize:10, borderRadius:5, padding:'3px 7px', marginBottom:3,
+                background: t.type==='error'?'#fef2f2':t.type==='retry'?'#fef3c7':t.type==='cache'||t.type==='done'?'#f0fdf4':'#f9fafb',
+                color: t.type==='error'?'#b91c1c':t.type==='retry'?'#92400e':t.type==='cache'||t.type==='done'?'#15803d':'#374151',
+                border:'1px solid #f3f4f6' }}>
+                {t.label}
+              </div>
+            ))
+          }
+        </div>
+
+        {/* Legend */}
+        <div style={{ paddingTop:12, borderTop:'1px solid #f3f4f6', marginTop:8 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>Legend</div>
+          {[['#d1d5db','Pending'],['#818cf8','Active'],['#22c55e','Done'],['#facc15','Skipped'],['#ef4444','Error']].map(([c,l])=>(
+            <div key={l} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
+              <div style={{ width:7, height:7, borderRadius:'50%', background:c, flexShrink:0 }} />
+              <span style={{ fontSize:10, color:'#6b7280' }}>{l}</span>
             </div>
           ))}
         </div>

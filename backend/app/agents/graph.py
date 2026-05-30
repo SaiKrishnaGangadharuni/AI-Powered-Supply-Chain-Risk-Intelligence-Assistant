@@ -12,6 +12,7 @@ answer is composed.
 """
 from __future__ import annotations
 
+import operator
 import sqlite3
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
@@ -36,8 +37,8 @@ class AgentState(TypedDict, total=False):
     query: str
     intent: str
     severity: str
-    retrieved_docs: List[Dict[str, Any]]
-    agent_outputs: Dict[str, Any]
+    retrieved_docs: Annotated[List[Dict[str, Any]], operator.add]
+    agent_outputs: Annotated[Dict[str, Any], lambda a, b: {**a, **b}]
     final_answer: Optional[str]
     needs_human: bool
     session_id: str

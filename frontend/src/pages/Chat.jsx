@@ -118,23 +118,72 @@ function ProcessModal({ nodeStatus, timeline, onClose }) {
   )
 }
 
+/* ── Markdown renderer ─────────────────────────────────────── */
+function MarkdownContent({ text }) {
+  const lines = text.split('\n')
+  const elements = []
+  let key = 0
+
+  const parseInline = (str) => {
+    // Bold **text**
+    const parts = str.split(/(\*\*[^*]+\*\*)/)
+    return parts.map((p, i) =>
+      p.startsWith('**') && p.endsWith('**')
+        ? <strong key={i}>{p.slice(2, -2)}</strong>
+        : p
+    )
+  }
+
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    if (!trimmed) { elements.push(<div key={key++} className="h-2" />); i++; continue }
+
+    // Heading: ## text
+    if (trimmed.startsWith('## ')) {
+      elements.push(<p key={key++} className="font-bold text-gray-900 mt-3 mb-1 text-sm">{parseInline(trimmed.slice(3))}</p>)
+      i++; continue
+    }
+
+    // Bullet: * or - or numbered
+    if (/^[*\-•]\s/.test(trimmed) || /^\d+\.\s/.test(trimmed)) {
+      const items = []
+      while (i < lines.length && (/^[*\-•]\s/.test(lines[i].trim()) || /^\d+\.\s/.test(lines[i].trim()))) {
+        const t = lines[i].trim().replace(/^[*\-•]\s|^\d+\.\s/, '')
+        items.push(<li key={i} className="mb-1">{parseInline(t)}</li>)
+        i++
+      }
+      elements.push(<ul key={key++} className="list-none pl-2 space-y-0.5 my-1">{items}</ul>)
+      continue
+    }
+
+    // Normal paragraph
+    elements.push(<p key={key++} className="mb-1">{parseInline(trimmed)}</p>)
+    i++
+  }
+
+  return <div className="space-y-0.5">{elements}</div>
+}
+
 /* ── Message bubble ────────────────────────────────────────── */
 function Message({ msg, onFeedback }) {
   const isUser = msg.role === 'user'
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">AI</div>
+        <div className="w-8 h-8 rounded-full bg-[#0C7063] flex items-center justify-center text-white text-xs font-bold mr-2 flex-shrink-0 mt-1">AI</div>
       )}
       <div className="max-w-[75%]">
-        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           isUser
-            ? 'bg-indigo-600 text-white rounded-br-sm'
+            ? 'bg-[#0C7063] text-white rounded-br-sm whitespace-pre-wrap'
             : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
         }`}>
           {msg.streaming
             ? <span className="flex items-center gap-2 text-gray-400"><Loader2 size={14} className="animate-spin" />{msg.content || 'Processing…'}</span>
-            : msg.content}
+            : isUser ? msg.content : <MarkdownContent text={msg.content} />}
           {msg.cached && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">cached ⚡</span>}
         </div>
         {!isUser && !msg.streaming && (
@@ -166,16 +215,24 @@ export default function Chat() {
   const [showSug,     setShowSug]     = useState(false)
   const listRef = useRef(null)
 
-  // Derive unique past user queries
-  const history = [...new Set(messages.filter((m) => m.role === 'user').map((m) => m.content))]
+  // Persisted query history across sessions
+  const [savedHistory, setSavedHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('scria_query_history') || '[]') } catch { return [] }
+  })
+
+  // Merge persisted + current session queries (deduplicated)
+  const history = [...new Set([
+    ...savedHistory,
+    ...messages.filter((m) => m.role === 'user').map((m) => m.content),
+  ])]
 
   // Filter suggestions on input change
   useEffect(() => {
     const q = input.trim().toLowerCase()
     if (!q) { setSuggestions([]); return }
     const matches = history.filter((h) => h.toLowerCase().includes(q) && h.toLowerCase() !== q)
-    setSuggestions(matches.slice(0, 4))
-  }, [input, messages])
+    setSuggestions(matches.slice(0, 5))
+  }, [input, messages, savedHistory])
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
@@ -187,14 +244,25 @@ export default function Chat() {
 
   const acceptSuggestion = (s) => { setInput(s); setSuggestions([]); setShowSug(false) }
 
+  const persistQuery = (q) => {
+    if (!q.trim()) return
+    setSavedHistory((prev) => {
+      const updated = [...new Set([...prev, q.trim()])].slice(-100) // keep last 100
+      try { localStorage.setItem('scria_query_history', JSON.stringify(updated)) } catch {}
+      return updated
+    })
+  }
+
   const handleKey = (e) => {
     if (e.key === 'Tab' && suggestions.length > 0) {
       e.preventDefault(); acceptSuggestion(suggestions[0]); return
     }
     if (e.key === 'Escape') { setSuggestions([]); return }
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setSuggestions([]); send(input); setInput('') }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); setSuggestions([]); persistQuery(input); send(input); setInput('')
+    }
   }
-  const handleSend = () => { setSuggestions([]); send(input); setInput('') }
+  const handleSend = () => { setSuggestions([]); persistQuery(input); send(input); setInput('') }
   const started = messages.length > 0
 
   return (
@@ -203,7 +271,7 @@ export default function Chat() {
       <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4 max-w-3xl w-full mx-auto">
         {!started && (
           <div className="flex flex-col items-center justify-center h-full text-center pb-10">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mb-4 shadow-lg">
+            <div className="w-14 h-14 rounded-2xl bg-[#0C7063] flex items-center justify-center mb-4 shadow-lg">
               <Zap size={28} className="text-white" />
             </div>
             <h2 className="text-xl font-semibold text-gray-800 mb-2">
@@ -227,15 +295,15 @@ export default function Chat() {
                 <button
                   key={i}
                   onMouseDown={(e) => { e.preventDefault(); acceptSuggestion(s) }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 border-b border-gray-100 last:border-0 truncate"
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-[#f0faf8] hover:text-[#0a5e53] border-b border-gray-100 last:border-0 truncate"
                 >
-                  <span className="text-indigo-500 mr-1">↑</span>{s}
+                  <span className="text-[#0e8a77] mr-1">↑</span>{s}
                 </button>
               ))}
               <div className="px-4 py-1.5 text-xs text-gray-400 bg-gray-50">Tab to accept · Esc to dismiss</div>
             </div>
           )}
-          <div className="flex items-end gap-2 bg-white border-2 border-gray-300 rounded-2xl px-4 py-2.5 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+          <div className="flex items-end gap-2 bg-white border-2 border-gray-300 rounded-2xl px-4 py-2.5 shadow-sm focus-within:border-[#0C7063] focus-within:ring-2 focus-within:ring-[#d4f0eb] transition-all">
             <textarea
               rows={1}
               value={input}
@@ -248,7 +316,7 @@ export default function Chat() {
             <button
               onClick={handleSend}
               disabled={!input.trim() || sending}
-              className="mb-0.5 p-2 rounded-xl bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700 transition-colors flex-shrink-0"
+              className="mb-0.5 p-2 rounded-xl bg-[#0C7063] text-white disabled:opacity-40 hover:bg-[#0a5e53] transition-colors flex-shrink-0"
             >
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
@@ -257,7 +325,7 @@ export default function Chat() {
             <span className="text-xs text-gray-400 min-h-[16px]">{liveStatus}</span>
             <button
               onClick={() => setShowModal(true)}
-              className="text-xs text-indigo-500 hover:text-indigo-700 underline underline-offset-2"
+              className="text-xs text-[#0e8a77] hover:text-[#0a5e53] underline underline-offset-2"
             >
               View Process
             </button>

@@ -24,10 +24,10 @@ function McpFlowOverlay({ onClose, status }) {
           {steps.map((step, i) => (
             <div key={step.id} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className="w-9 h-9 rounded-full bg-indigo-50 border-2 border-indigo-200 flex items-center justify-center text-base">
+                <div className="w-9 h-9 rounded-full bg-[#f0faf8] border-2 border-indigo-200 flex items-center justify-center text-base">
                   {step.icon}
                 </div>
-                {i < steps.length - 1 && <div className="w-0.5 h-6 bg-indigo-100 my-1" />}
+                {i < steps.length - 1 && <div className="w-0.5 h-6 bg-[#d4f0eb] my-1" />}
               </div>
               <div className="pb-3 pt-1">
                 <p className="text-sm font-medium text-gray-800">{step.label}</p>
@@ -36,7 +36,7 @@ function McpFlowOverlay({ onClose, status }) {
             </div>
           ))}
           {status && (
-            <div className="mt-3 p-3 bg-indigo-50 rounded-xl text-xs text-indigo-700 font-medium">
+            <div className="mt-3 p-3 bg-[#f0faf8] rounded-xl text-xs text-[#0a5e53] font-medium">
               {status}
             </div>
           )}
@@ -48,7 +48,6 @@ function McpFlowOverlay({ onClose, status }) {
 
 /* ── Pipeline Load Flow ────────────────────────────────────── */
 function PipelineFlowOverlay({ onClose, ingestionStatus }) {
-  // Steps in actual pipeline execution order
   const steps = [
     { label: 'Read CSV files',       sub: 'DataCo (180k rows) or Fashion CSV',       icon: '📄' },
     { label: 'Sample & Clean',       sub: '~2500 rows · null drop · type coerce',    icon: '🔍' },
@@ -59,41 +58,34 @@ function PipelineFlowOverlay({ onClose, ingestionStatus }) {
     { label: 'Verify & Report',      sub: 'Doc count · collection stats logged',     icon: '✅' },
   ]
 
-  // Map pipeline stage → which step index is currently active (0-based)
-  // stages from pipeline.py: '' → 'loaded' → 'transformed' → 'embedding X/Y' → 'bm25_built' → 'done'
+  const stageToActiveStep = (stage) => {
+    if (!stage) return 0
+    if (stage === 'loaded') return 1
+    if (stage === 'transformed') return 3
+    if (stage.startsWith('embedding')) {
+      const docsIndexed = ingestionStatus?.docs_indexed || 0
+      const docsBuilt   = ingestionStatus?.docs_built   || 1
+      return docsIndexed >= docsBuilt ? 4 : 3
+    }
+    if (stage === 'bm25_built') return 6
+    if (stage === 'done')       return 7
+    return 0
+  }
+
   const getStepStatus = (i) => {
     if (!ingestionStatus) return 'pending'
     const state = ingestionStatus.state || 'idle'
     const stage = ingestionStatus.stage || ''
-
     if (state === 'done') return 'done'
     if (state === 'idle') return 'pending'
     if (state === 'error') {
-      // best-effort: mark steps completed before error as done
       const errorAt = stageToActiveStep(stage)
       return i < errorAt ? 'done' : i === errorAt ? 'error' : 'pending'
     }
-
-    // running
     const activeStep = stageToActiveStep(stage)
     if (i < activeStep) return 'done'
     if (i === activeStep) return 'active'
     return 'pending'
-  }
-
-  const stageToActiveStep = (stage) => {
-    if (!stage) return 0                             // just kicked off
-    if (stage === 'loaded') return 1                 // csv read, now sampling
-    if (stage === 'transformed') return 3            // transform done, now embedding
-    if (stage.startsWith('embedding')) {
-      // embed+upsert happen together; use ratio to split between step 3 and 4
-      const docsIndexed = ingestionStatus?.docs_indexed || 0
-      const docsBuilt   = ingestionStatus?.docs_built   || 1
-      return docsIndexed >= docsBuilt ? 4 : 3         // 3=embed active, 4=chroma active
-    }
-    if (stage === 'bm25_built') return 6             // bm25 done, now verify
-    if (stage === 'done')       return 7             // all done
-    return 0
   }
 
   const dotColor = (s) => {
@@ -128,22 +120,16 @@ function PipelineFlowOverlay({ onClose, ingestionStatus }) {
                     <span className={`text-sm font-medium ${
                       s === 'active' ? 'text-blue-600' :
                       s === 'done'   ? 'text-green-700' :
-                      s === 'error'  ? 'text-red-600' :
-                      'text-gray-700'
-                    }`}>
-                      {step.label}
-                    </span>
+                      s === 'error'  ? 'text-red-600' : 'text-gray-700'
+                    }`}>{step.label}</span>
                     {s === 'active' && <Loader2 size={12} className="text-blue-500 animate-spin" />}
                     {s === 'done'   && <CheckCircle size={12} className="text-green-500" />}
                   </div>
-                  {/* embed progress bar */}
                   {s === 'active' && i === 3 && ingestionStatus?.docs_built > 0 && (
                     <div className="ml-6 mt-1.5 w-40">
                       <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-1 bg-blue-500 rounded-full transition-all duration-500"
-                          style={{ width: `${Math.round((ingestionStatus.docs_indexed / ingestionStatus.docs_built) * 100)}%` }}
-                        />
+                        <div className="h-1 bg-blue-500 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.round((ingestionStatus.docs_indexed / ingestionStatus.docs_built) * 100)}%` }} />
                       </div>
                       <p className="text-xs text-blue-600 mt-0.5">
                         {ingestionStatus.docs_indexed} / {ingestionStatus.docs_built} docs
@@ -156,24 +142,15 @@ function PipelineFlowOverlay({ onClose, ingestionStatus }) {
             )
           })}
         </div>
-
-        {/* Completion / Error banner */}
         {isDone && (
           <div className="mx-6 mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
             <div className="flex items-center gap-2 font-semibold mb-0.5">
-              <CheckCircle size={14} className="text-green-600" />
-              Ingestion complete
+              <CheckCircle size={14} className="text-green-600" /> Ingestion complete
             </div>
             <div className="text-xs text-green-700 space-y-0.5">
-              {ingestionStatus.docs_indexed != null && (
-                <div>{ingestionStatus.docs_indexed.toLocaleString()} docs indexed into ChromaDB</div>
-              )}
-              {ingestionStatus.bm25_count > 0 && (
-                <div>BM25 index: {ingestionStatus.bm25_count.toLocaleString()} docs</div>
-              )}
-              {ingestionStatus.elapsed_sec > 0 && (
-                <div>Completed in {ingestionStatus.elapsed_sec}s · source: {ingestionStatus.source_used}</div>
-              )}
+              {ingestionStatus.docs_indexed != null && <div>{ingestionStatus.docs_indexed.toLocaleString()} docs indexed into ChromaDB</div>}
+              {ingestionStatus.bm25_count > 0 && <div>BM25 index: {ingestionStatus.bm25_count.toLocaleString()} docs</div>}
+              {ingestionStatus.elapsed_sec > 0 && <div>Completed in {ingestionStatus.elapsed_sec}s · source: {ingestionStatus.source_used}</div>}
             </div>
           </div>
         )}
@@ -182,8 +159,6 @@ function PipelineFlowOverlay({ onClose, ingestionStatus }) {
             <span className="font-semibold">Error: </span>{ingestionStatus.error}
           </div>
         )}
-
-        {/* Live stage ticker (while running) */}
         {ingestionStatus?.state === 'running' && (
           <div className="mx-6 mb-4 p-2.5 bg-blue-50 rounded-xl text-xs text-blue-700">
             <div className="flex items-center gap-1.5">
@@ -202,7 +177,6 @@ function PipelineFlowOverlay({ onClose, ingestionStatus }) {
 
 /* ── Main Admin ────────────────────────────────────────────── */
 export default function Admin() {
-  const [dataset, setDataset]           = useState('dataco')
   const [source, setSource]             = useState('auto')
   const [reset, setReset]               = useState(false)
   const [status, setStatus]             = useState(null)
@@ -218,6 +192,10 @@ export default function Admin() {
   const [clearing, setClearing]         = useState(false)
   const [clearResult, setClearResult]   = useState(null)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  // source file picker
+  const [sourceFiles, setSourceFiles]   = useState([])
+  const [selectedFiles, setSelectedFiles] = useState([])
+  const [loadingSources, setLoadingSources] = useState(false)
 
   useEffect(() => {
     let t
@@ -235,11 +213,28 @@ export default function Admin() {
       .catch(() => setMcpAvailable(false))
   }, [])
 
+  useEffect(() => {
+    setLoadingSources(true)
+    api.ingestionListSources()
+      .then((r) => {
+        setSourceFiles(r.files || [])
+        // don't auto-select — let user choose
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSources(false))
+  }, [])
+
   const runIngestion = async () => {
     setError(null)
     setShowPipelineFlow(true)
-    try { await api.ingestionRun({ dataset, source, reset }) }
-    catch (e) { setError(e.message) }
+    try {
+      await api.ingestionRun({
+        dataset: 'dataco',
+        source,
+        reset,
+        custom_csv_path: selectedFiles[0] || '',
+      })
+    } catch (e) { setError(e.message) }
   }
 
   const browse = async () => {
@@ -265,6 +260,16 @@ export default function Admin() {
     setDownloading(false)
   }
 
+  const refreshSources = async () => {
+    setLoadingSources(true)
+    try {
+      const r = await api.ingestionListSources()
+      setSourceFiles(r.files || [])
+      // don't auto-select — let user choose
+    } catch {}
+    setLoadingSources(false)
+  }
+
   const clearVectorDB = async () => {
     setShowClearConfirm(false)
     setClearing(true)
@@ -277,8 +282,10 @@ export default function Admin() {
     setClearing(false)
   }
 
+  // Group files by folder for display
+
   const statusColor = {
-    idle: 'text-gray-400', running: 'text-blue-600', done: 'text-green-600', error: 'text-red-600',
+    idle: 'text-gray-400', running: 'text-blue-600', done: 'text-green-600', error: 'text-red-600', already_loaded: 'text-green-600',
   }
 
   return (
@@ -303,33 +310,28 @@ export default function Admin() {
       {/* ── Step 1: Download via MCP ── */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
-          <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</span>
+          <span className="w-6 h-6 rounded-full bg-[#0C7063] text-white text-xs flex items-center justify-center font-bold">1</span>
           <h3 className="text-sm font-semibold text-gray-800">Download Dataset (MCP)</h3>
           <button onClick={() => setShowMcpFlow(true)}
-            className="ml-auto text-xs text-indigo-500 hover:underline">View Flow</button>
+            className="ml-auto text-xs text-[#0e8a77] hover:underline">View Flow</button>
         </div>
         <div className="flex gap-2 mb-3">
-          <input
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-400"
-          />
+          <input value={slug} onChange={(e) => setSlug(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#0e8a77]" />
           <button onClick={browse} disabled={browsing}
-            className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs rounded-lg hover:bg-indigo-100 disabled:opacity-50 flex items-center gap-1">
-            {browsing ? <Loader2 size={12} className="animate-spin" /> : null}
-            Browse
+            className="px-3 py-1.5 bg-[#f0faf8] text-[#0a5e53] text-xs rounded-lg hover:bg-[#d4f0eb] disabled:opacity-50 flex items-center gap-1">
+            {browsing ? <Loader2 size={12} className="animate-spin" /> : null} Browse
           </button>
-          <button onClick={() => { setSlug(DATACO_SLUG) }} className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg">DataCo</button>
-          <button onClick={() => { setSlug(FASHION_SLUG) }} className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg">Fashion</button>
+          <button onClick={() => setSlug(DATACO_SLUG)} className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg">DataCo</button>
+          <button onClick={() => setSlug(FASHION_SLUG)} className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg">Fashion</button>
         </div>
         {files.length > 0 && (
           <div className="bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1">
             {files.map((f) => (
               <div key={f.path || f.name} className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 truncate max-w-xs">{f.path || f.name}</span>
-                <button onClick={() => download(f.path || f.name)}
-                  disabled={downloading}
-                  className="ml-2 text-indigo-600 hover:text-indigo-800 flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => download(f.path || f.name)} disabled={downloading}
+                  className="ml-2 text-[#0C7063] hover:text-[#083f37] flex items-center gap-1 flex-shrink-0">
                   <Download size={11} /> Download
                 </button>
               </div>
@@ -344,41 +346,90 @@ export default function Admin() {
       {/* ── Step 2: Load into Vector DB ── */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
-          <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">2</span>
+          <span className="w-6 h-6 rounded-full bg-[#0C7063] text-white text-xs flex items-center justify-center font-bold">2</span>
           <h3 className="text-sm font-semibold text-gray-800">Load into Vector DB</h3>
           <button onClick={() => setShowPipelineFlow(true)}
-            className="ml-auto text-xs text-indigo-500 hover:underline">View Flow</button>
+            className="ml-auto text-xs text-[#0e8a77] hover:underline">View Flow</button>
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">Dataset</label>
-            <select value={dataset} onChange={(e) => setDataset(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-400">
-              <option value="dataco">DataCo (180k rows)</option>
-              <option value="fashion">Fashion (fallback)</option>
-            </select>
+
+        {/* File list with loaded badges */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium text-gray-600">Select File to Load</label>
+            <button onClick={refreshSources} className="text-xs text-[#3aab99] hover:text-[#0C7063] flex items-center gap-1">
+              <RefreshCw size={10} className={loadingSources ? 'animate-spin' : ''} /> Refresh
+            </button>
           </div>
-          <div>
+          {loadingSources ? (
+            <div className="flex items-center gap-2 text-xs text-gray-400 py-3"><Loader2 size={12} className="animate-spin" /> Scanning folder…</div>
+          ) : sourceFiles.length === 0 ? (
+            <p className="text-xs text-gray-400 py-2">No files found in data/source_dataset/</p>
+          ) : (
+            <div className="border border-gray-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+              {sourceFiles.map((f) => {
+                const isSelected = selectedFiles[0] === f.path
+                const extColor = {
+                  '.csv': 'bg-blue-50 text-blue-600', '.tsv': 'bg-blue-50 text-blue-600',
+                  '.xlsx': 'bg-green-50 text-green-600', '.xls': 'bg-green-50 text-green-600',
+                  '.json': 'bg-yellow-50 text-yellow-700', '.parquet': 'bg-purple-50 text-purple-600',
+                }[f.ext] || 'bg-gray-100 text-gray-500'
+                return (
+                  <div
+                    key={f.path}
+                    onClick={() => setSelectedFiles([f.path])}
+                    className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-gray-100 last:border-0 transition-colors ${
+                      isSelected ? 'bg-[#f0faf8]' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0 ${extColor}`}>{f.ext.slice(1)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-medium truncate ${isSelected ? 'text-[#0a5e53]' : 'text-gray-700'}`}>
+                        {f.folder ? <span className="text-gray-400">{f.folder}/</span> : null}{f.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400">{f.size_mb} MB</p>
+                    </div>
+                    {f.loaded ? (
+                      <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full flex-shrink-0 font-medium">
+                        ✓ Loaded · {f.loaded_docs.toLocaleString()} docs
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full flex-shrink-0">Not loaded</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4 mb-4">
+          <div className="flex-1">
             <label className="text-xs text-gray-500 mb-1 block">Source</label>
             <select value={source} onChange={(e) => setSource(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-400">
+              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#0e8a77]">
               <option value="auto">Auto (MCP → local)</option>
               <option value="kaggle_mcp">Kaggle MCP only</option>
               <option value="local">Local CSV only</option>
             </select>
           </div>
-        </div>
-        <div className="flex items-center gap-3 mb-4">
-          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-            <input type="checkbox" checked={reset} onChange={(e) => setReset(e.target.checked)}
-              className="rounded" />
-            Reset collection (re-embed from scratch)
+          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer mt-4">
+            <input type="checkbox" checked={reset} onChange={(e) => setReset(e.target.checked)} className="rounded" />
+            Force re-embed (reset)
           </label>
         </div>
-        <button onClick={runIngestion}
-          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
+
+        {/* Already-loaded hint */}
+        {selectedFiles[0] && sourceFiles.find(f => f.path === selectedFiles[0])?.loaded && !reset && (
+          <div className="mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-2">
+            <span>✅</span>
+            <span>This file is already loaded. Click Load to confirm, or enable <b>Force re-embed</b> to reload from scratch.</span>
+          </div>
+        )}
+
+        <button onClick={runIngestion} disabled={selectedFiles.length === 0}
+          className="w-full py-2 bg-[#0C7063] hover:bg-[#0a5e53] disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
           <Database size={14} />
-          Process &amp; Load into Vector DB
+          {selectedFiles[0] && sourceFiles.find(f => f.path === selectedFiles[0])?.loaded && !reset ? 'Already Loaded — Confirm' : 'Process & Load into Vector DB'}
         </button>
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
@@ -412,31 +463,23 @@ export default function Admin() {
         <p className="text-xs text-gray-500 mb-4">
           Deletes the ChromaDB collection and BM25 index. You will need to re-run ingestion afterward. Useful for a clean demo reset.
         </p>
-        {clearResult && (
-          <p className="mb-3 text-xs text-green-600 font-medium">✓ {clearResult}</p>
-        )}
+        {clearResult && <p className="mb-3 text-xs text-green-600 font-medium">✓ {clearResult}</p>}
         {!showClearConfirm ? (
-          <button
-            onClick={() => setShowClearConfirm(true)}
+          <button onClick={() => setShowClearConfirm(true)}
             className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-xl transition-colors border border-red-200">
-            <Trash2 size={13} />
-            Clear Vector DB
+            <Trash2 size={13} /> Clear Vector DB
           </button>
         ) : (
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-              <AlertTriangle size={13} />
-              Are you sure? This cannot be undone.
+              <AlertTriangle size={13} /> Are you sure? This cannot be undone.
             </div>
-            <button
-              onClick={clearVectorDB}
-              disabled={clearing}
+            <button onClick={clearVectorDB} disabled={clearing}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 disabled:opacity-50">
               {clearing ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
               {clearing ? 'Clearing…' : 'Yes, Clear'}
             </button>
-            <button
-              onClick={() => setShowClearConfirm(false)}
+            <button onClick={() => setShowClearConfirm(false)}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl">
               Cancel
             </button>

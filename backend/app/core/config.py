@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # ---- LLM Providers ----
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_base_url: str = ""  # optional gateway URL e.g. https://keygateway.arshnivlabs.com
 
     groq_api_key: str = ""
     groq_model_small: str = "llama-3.1-8b-instant"

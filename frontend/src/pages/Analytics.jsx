@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -35,9 +36,12 @@ function Section({ title, children }) {
 }
 
 // ── Loading / error states ──────────────────────────────────────────────────
-function Placeholder({ text = 'Loading…' }) {
+function Placeholder({ text = 'Loading…', loading = false }) {
   return (
-    <div className="h-40 flex items-center justify-center text-gray-400 text-sm">{text}</div>
+    <div className="h-40 flex items-center justify-center text-gray-400 text-sm gap-2">
+      {loading && <svg className="animate-spin h-4 w-4 text-[#3aab99]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>}
+      {text}
+    </div>
   )
 }
 
@@ -57,32 +61,64 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-function useFetch(fetchFn) {
-  const [data, setData] = useState(null)
-  const [err, setErr]   = useState(null)
+function useFetch(fetchFn, version) {
+  const [data, setData]       = useState(null)
+  const [err, setErr]         = useState(null)
+  const [loading, setLoading] = useState(true)
+  const fnRef = useRef(fetchFn)
+  fnRef.current = fetchFn
   useEffect(() => {
     let alive = true
-    fetchFn()
-      .then(d => alive && setData(d))
-      .catch(e => alive && setErr(e.message))
+    setLoading(true)
+    setErr(null)
+    fnRef.current()
+      .then(d  => { if (alive) { setData(d); setLoading(false) } })
+      .catch(e => { if (alive) { setErr(e.message); setLoading(false) } })
     return () => { alive = false }
-  }, [])
-  return { data, err }
+  }, [version])
+  return { data, err, loading }
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────
 export default function Analytics() {
-  const summary   = useFetch(() => api.get('/api/analytics/summary'))
-  const byMarket  = useFetch(() => api.get('/api/analytics/late-delivery-by-market'))
-  const byMode    = useFetch(() => api.get('/api/analytics/shipment-mode-breakdown'))
-  const orderStat = useFetch(() => api.get('/api/analytics/order-status-distribution'))
-  const gapRegion = useFetch(() => api.get('/api/analytics/delivery-gap-by-region'))
-  const fraud     = useFetch(() => api.get('/api/analytics/fraud-by-market'))
+  const [version,     setVersion]     = useState(0)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
+  const refresh = useCallback(() => {
+    setVersion(v => v + 1)
+    setLastUpdated(new Date().toLocaleTimeString())
+  }, [])
+
+  // auto-load on mount
+  useEffect(() => { setLastUpdated(new Date().toLocaleTimeString()) }, [])
+
+  const summary   = useFetch(() => api.get('/api/analytics/summary'),                    version)
+  const byMarket  = useFetch(() => api.get('/api/analytics/late-delivery-by-market'),    version)
+  const byMode    = useFetch(() => api.get('/api/analytics/shipment-mode-breakdown'),    version)
+  const orderStat = useFetch(() => api.get('/api/analytics/order-status-distribution'), version)
+  const gapRegion = useFetch(() => api.get('/api/analytics/delivery-gap-by-region'),    version)
+  const fraud     = useFetch(() => api.get('/api/analytics/fraud-by-market'),           version)
+
+  const anyLoading = [summary, byMarket, byMode, orderStat, gapRegion, fraud].some(r => r.loading)
   const kpi = summary.data || {}
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 p-6 space-y-6">
+      {/* Header bar */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-gray-800">Supply Chain Analytics</h2>
+          {lastUpdated && <p className="text-xs text-gray-400 mt-0.5">Last updated: {lastUpdated}</p>}
+        </div>
+        <button
+          onClick={refresh}
+          disabled={anyLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-[#0C7063] hover:bg-[#0a5e53] disabled:opacity-50 text-white text-xs font-medium rounded-xl transition-colors"
+        >
+          <RefreshCw size={13} className={anyLoading ? 'animate-spin' : ''} />
+          {anyLoading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <KpiCard

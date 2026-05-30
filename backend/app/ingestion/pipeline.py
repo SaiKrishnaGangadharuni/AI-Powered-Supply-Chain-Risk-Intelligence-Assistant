@@ -27,6 +27,7 @@ import pandas as pd
 from app.core.config import settings
 from app.core.logging import logger
 from app.ingestion import kaggle_mcp, local_loader, transformer
+from app.ingestion.file_registry import file_registry
 from app.retrieval.bm25_index import BM25Index
 from app.retrieval.embeddings import embed_texts
 from app.retrieval.vector_store import VectorStore
@@ -81,6 +82,7 @@ def run_pipeline(
     dataset: SourceName = "dataco",
     source: SourceMode = "auto",
     reset: bool = False,
+    custom_csv_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the full ingestion pipeline.
 
@@ -97,18 +99,56 @@ def run_pipeline(
 
     try:
         # 1. Load DataFrame
-        df, source_used = _load_dataframe(dataset, source, status)
+        if custom_csv_path:
+            abs_path = settings.resolve(f"./data/source_dataset/{custom_csv_path}")
+            reg_key = custom_csv_path  # registry key = relative path
+            if not reset and file_registry.is_loaded(reg_key):
+                info = file_registry.get(reg_key)
+                status.state = "done"
+                status.stage = "already_loaded"
+                status.source_used = "custom"
+                status.docs_built = info.get("docs", 0)
+                status.docs_indexed = info.get("docs", 0)
+                status.rows_loaded = info.get("rows", 0)
+                status.event(f"✅ {abs_path.name} already loaded ({info.get('docs',0):,} docs). Use Reset to reload.")
+                status.finished_at = time.time()
+                status.elapsed_sec = 0.0
+                status_store.set(status)
+                return status_snapshot()
+
+            status.event(f"Loading: {abs_path.name}")
+            df = _load_any_file(abs_path, status)
+            source_used = "custom"
+            transform_source = "custom"
+        else:
+            reg_key = f"{dataset}:{source}"
+            if not reset and file_registry.is_loaded(reg_key):
+                info = file_registry.get(reg_key)
+                status.state = "done"
+                status.stage = "already_loaded"
+                status.source_used = source
+                status.docs_built = info.get("docs", 0)
+                status.docs_indexed = info.get("docs", 0)
+                status.rows_loaded = info.get("rows", 0)
+                status.event(f"✅ {dataset} already loaded ({info.get('docs',0):,} docs). Use Reset to reload.")
+                status.finished_at = time.time()
+                status.elapsed_sec = 0.0
+                status_store.set(status)
+                return status_snapshot()
+            df, source_used = _load_dataframe(dataset, source, status)
+            transform_source = dataset
         status.source_used = source_used
         status.rows_loaded = len(df)
         status.stage = "loaded"
         status.event(f"Loaded {len(df):,} rows via {source_used}")
 
-        # 2. Sample
-        df = _maybe_sample(df, dataset)
+        # 2. Sample (only for known datasets)
+        if transform_source != "custom":
+            df = _maybe_sample(df, dataset)
         status.event(f"After sampling: {len(df):,} rows")
 
         # 3. Transform
-        docs = transformer.transform_dataframe(df, dataset)
+        docs = transformer.transform_dataframe(df, transform_source)
         status.docs_built = len(docs)
         status.stage = "transformed"
         status.event(f"Built {len(docs):,} incident documents")
@@ -138,6 +178,7 @@ def run_pipeline(
         status.stage = "done"
         status.finished_at = time.time()
         status.elapsed_sec = round(status.finished_at - t0, 2)
+        file_registry.mark_loaded(reg_key, rows=status.rows_loaded, docs=status.docs_indexed)
         logger.info(
             f"Ingestion done in {status.elapsed_sec}s — "
             f"vectors={status.vector_count} bm25={status.bm25_count}"
@@ -155,6 +196,38 @@ def run_pipeline(
 
 
 # ---------------- helpers ----------------
+
+def _load_any_file(path: "Path", status: PipelineStatus) -> "pd.DataFrame":
+    """Load any supported file type into a DataFrame."""
+    suffix = path.suffix.lower()
+    status.event(f"Reading {suffix} file: {path.name}")
+    if suffix in (".csv", ".tsv"):
+        sep = "\t" if suffix == ".tsv" else ","
+        for enc in ("utf-8", "latin-1", "cp1252"):
+            try:
+                return pd.read_csv(str(path), encoding=enc, sep=sep, low_memory=False)
+            except UnicodeDecodeError:
+                continue
+        return pd.read_csv(str(path), encoding="latin-1", sep=sep, low_memory=False)
+    elif suffix in (".xlsx", ".xls"):
+        return pd.read_excel(str(path))
+    elif suffix == ".json":
+        try:
+            return pd.read_json(str(path))
+        except Exception:
+            return pd.read_json(str(path), lines=True)
+    elif suffix == ".parquet":
+        return pd.read_parquet(str(path))
+    else:
+        # try CSV as fallback
+        for enc in ("utf-8", "latin-1"):
+            try:
+                return pd.read_csv(str(path), encoding=enc, low_memory=False)
+            except Exception:
+                continue
+        raise ValueError(f"Unsupported file type: {suffix}")
+
+
 def _load_dataframe(
     dataset: SourceName,
     source: SourceMode,

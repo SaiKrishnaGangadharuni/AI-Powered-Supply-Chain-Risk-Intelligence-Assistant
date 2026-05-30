@@ -26,7 +26,10 @@ def _get_openai():
     if _openai_client is None:
         from openai import OpenAI
 
-        _openai_client = OpenAI(api_key=settings.openai_api_key)
+        _openai_client = OpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url or None,
+        )
     return _openai_client
 
 

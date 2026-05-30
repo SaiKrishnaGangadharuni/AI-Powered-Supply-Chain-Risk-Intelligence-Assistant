@@ -53,7 +53,7 @@ def _check_faithfulness(answer: str, context: str) -> Dict[str, Any]:
             SystemMessage(content=_FAITHFULNESS_SYSTEM),
             HumanMessage(content=f"CONTEXT:\n{context}\n\nANSWER:\n{answer}"),
         ]
-        resp = router.invoke(TaskType.JUDGE, msgs)
+        resp = router.invoke(TaskType.ROUTING, msgs)  # groq_small — fast YES/NO classification
         raw = (getattr(resp, "content", "") or "").strip()
         import json as _json
 
