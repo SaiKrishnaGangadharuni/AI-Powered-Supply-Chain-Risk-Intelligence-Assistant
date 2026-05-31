@@ -18,6 +18,9 @@ dist/
 
 # Local data / runtime
 backend/storage/
+storage/
+data/kaggle_cache/
+data/loaded_files.json
 *.db
 *.sqlite
 *.sqlite3

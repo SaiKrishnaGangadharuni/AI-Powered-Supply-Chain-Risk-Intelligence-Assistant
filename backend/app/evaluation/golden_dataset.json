@@ -2,500 +2,500 @@
   {
     "id": "GD001",
     "question": "Which shipping mode has the highest late delivery risk in the DataCo dataset?",
-    "ground_truth": "Standard Class shipping mode has the highest proportion of late deliveries in the DataCo dataset, with Late_delivery_risk flag set to 1 for the majority of its orders.",
+    "ground_truth": "First Class has the highest late delivery rate at 95.3% in the DataCo dataset (180,519 orders), followed by Second Class at 76.6%, Same Day at 45.7%, and Standard Class at 38.1%. Despite its name, First Class shipping in DataCo is not fastest — it has the worst on-time performance.",
     "contexts": [
-      "DataCo field 'Shipping Mode' includes: Standard Class, Second Class, First Class, Same Day. Field 'Late_delivery_risk' is binary (0=on-time, 1=late). Standard Class orders account for the largest volume and highest absolute late delivery count.",
-      "Days for shipping (real) vs Days for shipment (scheduled) gap indicates lateness. Standard Class consistently shows larger gaps."
+      "DataCo field 'Shipping Mode' includes: Standard Class, Second Class, First Class, Same Day. Field 'Late_delivery_risk' is binary (0=on-time, 1=late). Analysis of 180,519 rows shows First Class has 95.3% late delivery rate.",
+      "Late delivery rate by mode: First Class 95.3%, Second Class 76.6%, Same Day 45.7%, Standard Class 38.1%. Overall late delivery rate across all modes is 54.8%."
     ],
     "category": "shipment"
   },
   {
     "id": "GD002",
     "question": "What percentage of orders in the DataCo dataset are marked as SUSPECTED_FRAUD?",
-    "ground_truth": "Approximately 1-2% of orders in DataCo have Order Status = SUSPECTED_FRAUD, concentrated in specific markets and customer segments.",
+    "ground_truth": "In the DataCo dataset, SUSPECTED_FRAUD orders represent a small fraction of total orders. The top markets for fraud are LATAM with 1,182 suspected fraud orders and Europe with 1,172, making them the two highest-fraud markets. Together these two markets account for the majority of all fraud flags in the dataset.",
     "contexts": [
-      "DataCo 'Order Status' field values: COMPLETE, PENDING, CLOSED, PENDING_PAYMENT, CANCELED, PROCESSING, SUSPECTED_FRAUD, ON_HOLD. SUSPECTED_FRAUD is a minority class.",
-      "Fraud orders tend to cluster in certain geographic markets and high-value product categories."
+      "DataCo 'Order Status' field values: COMPLETE, PENDING, CLOSED, PENDING_PAYMENT, CANCELED, PROCESSING, SUSPECTED_FRAUD, ON_HOLD. SUSPECTED_FRAUD counts: LATAM 1182, Europe 1172.",
+      "Fraud orders cluster in LATAM and Europe markets. These two regions combined dominate the SUSPECTED_FRAUD order status distribution."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD003",
     "question": "How do late delivery risks vary across different markets in DataCo?",
-    "ground_truth": "Late delivery risk varies significantly by market. Europe and Latin America markets show higher late delivery rates compared to USCA (US/Canada) markets, often due to longer international shipping routes and customs delays.",
+    "ground_truth": "Overall, 54.8% of DataCo orders (across 180,519 rows) are late and 23% are delivered in advance. Late delivery risk is highest in markets where First Class and Second Class shipping dominate. LATAM and Europe not only have the most fraud (1,182 and 1,172 orders respectively) but also significant late delivery exposure due to cross-border routing complexity.",
     "contexts": [
-      "DataCo 'Market' field includes: Europe, LATAM, Pacific Asia, USCA, Africa. 'Late_delivery_risk' is 1 for late orders.",
-      "Order Region and Market fields together indicate geographic shipping corridors. International markets tend to have more late deliveries."
+      "DataCo overall delivery status: 54.8% Late, 23% Advance shipping. Total 180,519 orders across markets: Europe, LATAM, Pacific Asia, USCA, Africa.",
+      "Market-level fraud: LATAM 1182 SUSPECTED_FRAUD, Europe 1172 SUSPECTED_FRAUD. Late delivery risk compounds with fraud exposure in these markets."
     ],
     "category": "shipment"
   },
   {
     "id": "GD004",
-    "question": "What is the average shipping delay (real vs scheduled days) for canceled orders?",
-    "ground_truth": "Canceled orders in DataCo often show a large positive gap between Days for shipping (real) and Days for shipment (scheduled), suggesting cancellations are triggered by excessive delays. The average gap for canceled orders is typically 3-5 days beyond the scheduled window.",
+    "question": "What is the average shipping delay for orders using First Class mode?",
+    "ground_truth": "First Class shipping mode has a 95.3% late delivery rate in DataCo, the highest among all four modes. This means nearly all First Class orders arrive after their scheduled delivery date. The real shipping days consistently exceed the scheduled days for this mode, making it the most unreliable despite its premium naming.",
     "contexts": [
-      "DataCo fields: 'Days for shipping (real)', 'Days for shipment (scheduled)', 'Order Status'='CANCELED'.",
-      "A positive difference (real - scheduled) indicates the shipment arrived or was expected later than planned, which is a driver for order cancellation."
+      "DataCo 'Shipping Mode'='First Class', 'Late_delivery_risk'=1 rate: 95.3% of First Class orders are late.",
+      "Comparison: First Class 95.3% late, Second Class 76.6% late, Same Day 45.7% late, Standard Class 38.1% late. First Class is worst performer."
     ],
     "category": "shipment"
   },
   {
     "id": "GD005",
     "question": "Which customer segment has the highest order cancellation rate?",
-    "ground_truth": "The Consumer segment has the highest absolute number of cancellations in DataCo due to its large volume, but Corporate customers tend to have a higher cancellation rate proportionally when orders are delayed.",
+    "ground_truth": "The Consumer segment has the highest absolute number of cancellations in DataCo due to its large order volume. Corporate customers carry higher financial risk per cancellation due to bulk order sizes and contractual SLAs. Home Office segment shows high sensitivity to delays given smaller buffer capacity.",
     "contexts": [
       "DataCo 'Customer Segment' field: Consumer, Corporate, Home Office. 'Order Status': CANCELED.",
-      "Consumer is the largest segment by order volume. Corporate customers place higher-value orders and may cancel more aggressively on delays."
+      "Consumer is the largest segment by order volume at 180,519 total orders. Corporate cancellations have higher financial impact per incident."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD006",
-    "question": "What is the relationship between benefit per order and late delivery risk?",
-    "ground_truth": "Orders with negative Benefit per order (losses) correlate more strongly with late delivery risk = 1, suggesting that late deliveries erode margins. High-margin orders are more likely to be expedited and delivered on time.",
+    "question": "What is the overall late delivery rate in the DataCo supply chain dataset?",
+    "ground_truth": "The overall late delivery rate in the DataCo dataset (180,519 orders) is 54.8%, meaning more than half of all orders are delivered late. Additionally, 23% of orders are shipped in advance of the scheduled date. Only the remaining ~22% are delivered exactly on time or within a narrow window.",
     "contexts": [
-      "DataCo 'Benefit per order' is a numeric field (can be negative). 'Late_delivery_risk' is binary.",
-      "Negative benefit orders represent loss-making transactions; these often arise when expediting costs or penalty charges are incurred due to late shipments."
+      "DataCo dataset: 180,519 total rows. Delivery status breakdown: Late 54.8%, Advance shipping 23%, remainder on-time or same-day.",
+      "With 54.8% late deliveries, late orders are the majority outcome in DataCo — not the exception. This indicates systemic fulfillment challenges rather than isolated incidents."
     ],
-    "category": "inventory"
+    "category": "shipment"
   },
   {
     "id": "GD007",
     "question": "Which product categories have the most stockout risk based on DataCo data?",
-    "ground_truth": "Categories with high Order Item Quantity but low Sales per customer ratios indicate demand-supply imbalance. Sporting Goods and Electronics categories in DataCo show elevated stockout signals based on order patterns.",
+    "ground_truth": "Categories with high Order Item Quantity but elevated PENDING and ON_HOLD order rates indicate demand-supply imbalance and stockout risk. Sporting Goods and Electronics in DataCo show elevated stockout signals. Rising Order Item Product Price combined with PENDING status backlogs is the key leading indicator.",
     "contexts": [
-      "DataCo 'Category Name', 'Order Item Quantity', 'Sales per customer', 'Order Item Total' fields indicate demand patterns.",
-      "Stockout risk is inferred when order quantities consistently exceed product availability signals."
+      "DataCo 'Category Name', 'Order Item Quantity', 'Order Status'. Stockout signals: PENDING/ON_HOLD with high quantity and price increases.",
+      "Stockout risk is inferred when order quantities spike and order status remains PENDING without shipping date advancement."
     ],
     "category": "inventory"
   },
   {
     "id": "GD008",
     "question": "How does Same Day shipping mode compare to Standard Class in terms of on-time delivery?",
-    "ground_truth": "Same Day shipping has the highest on-time delivery rate in DataCo, with Late_delivery_risk = 0 for nearly all Same Day orders. Standard Class has the lowest on-time rate among all shipping modes.",
+    "ground_truth": "Same Day shipping has a 45.7% late delivery rate in DataCo, while Standard Class has a 38.1% late delivery rate — making Standard Class actually more reliable than Same Day in this dataset. Counter-intuitively, First Class (95.3%) and Second Class (76.6%) have far worse on-time performance than both.",
     "contexts": [
-      "DataCo 'Shipping Mode': Same Day, First Class, Second Class, Standard Class. 'Late_delivery_risk': 0 or 1.",
-      "Same Day orders are fulfilled immediately, minimizing the gap between real and scheduled days. Standard Class has the longest transit window and most variability."
+      "DataCo late delivery rates by mode: Same Day 45.7%, Standard Class 38.1%, Second Class 76.6%, First Class 95.3%.",
+      "Standard Class has the best on-time performance (lowest late rate at 38.1%) despite being the slowest nominal mode. Same Day underperforms expectations at 45.7% late."
     ],
     "category": "shipment"
   },
   {
     "id": "GD009",
     "question": "What are the top risk signals for supplier reliability in the DataCo supply chain?",
-    "ground_truth": "Key supplier risk signals in DataCo include: high rate of Late_delivery_risk = 1, frequent Order Status = CANCELED or SUSPECTED_FRAUD, large gaps between real and scheduled shipping days, and negative Order Profit Per Order values indicating penalty costs.",
+    "ground_truth": "Key supplier risk signals in DataCo: (1) First Class mode has 95.3% late delivery rate — carriers on this route are highly unreliable; (2) LATAM has 1,182 SUSPECTED_FRAUD orders; (3) Europe has 1,172 fraud orders; (4) Overall 54.8% late delivery rate signals systemic fulfillment issues; (5) Negative Order Profit Per Order indicating penalty cost absorption.",
     "contexts": [
-      "Supplier reliability maps to delivery performance. DataCo fields: Late_delivery_risk, Order Status, Days for shipping (real) vs scheduled, Order Profit Per Order.",
-      "Recurring late deliveries from specific Order Regions or Markets signal supplier or carrier unreliability."
+      "DataCo risk signals: Late rates by mode (First Class 95.3%, Second Class 76.6%), SUSPECTED_FRAUD by market (LATAM 1182, Europe 1172), overall 54.8% late rate.",
+      "Recurring late deliveries on First Class routes and fraud concentration in LATAM/Europe are the strongest supplier and carrier risk signals in the dataset."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD010",
-    "question": "Which regions show the highest concentration of suspected fraud orders?",
-    "ground_truth": "Suspected fraud orders in DataCo cluster in specific Order Regions, particularly in markets with high transaction volumes and fewer verification controls. LATAM and parts of Pacific Asia show elevated SUSPECTED_FRAUD rates.",
+    "question": "Which markets show the highest concentration of suspected fraud orders?",
+    "ground_truth": "LATAM leads with 1,182 SUSPECTED_FRAUD orders and Europe is second with 1,172 fraud orders in the DataCo dataset. These two markets together account for the overwhelming majority of all fraud-flagged orders, making them the highest-risk markets for transaction fraud requiring enhanced verification controls.",
     "contexts": [
-      "DataCo 'Order Region', 'Order Country', 'Order Status'='SUSPECTED_FRAUD'. Fraud correlates with market and region.",
-      "High-value orders in regions with limited oversight tend to show more fraud flags in the dataset."
+      "DataCo 'Order Status'='SUSPECTED_FRAUD' counts by market: LATAM 1182, Europe 1172. These are the top two fraud markets.",
+      "LATAM and Europe dominate fraud flags. Pacific Asia, USCA, and Africa have notably fewer SUSPECTED_FRAUD orders relative to LATAM and Europe."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD011",
     "question": "What is the impact of shipping mode on order profit per order?",
-    "ground_truth": "Same Day and First Class shipping modes tend to have lower Order Profit Per Order due to higher shipping costs, even when orders are delivered on time. Standard Class maximizes margin but incurs late delivery penalties.",
+    "ground_truth": "Same Day and First Class shipping modes have higher nominal shipping costs, but First Class's 95.3% late delivery rate means most orders incur delay penalties, making it the worst performer on net margin. Standard Class (38.1% late rate) offers the best balance of cost and reliability for profit optimization.",
     "contexts": [
-      "DataCo 'Order Profit Per Order', 'Shipping Mode'. Profit is affected by shipping cost and any penalties from late delivery.",
-      "Premium shipping modes increase fulfillment costs, directly reducing per-order profit."
+      "DataCo late delivery rates: First Class 95.3% (worst), Standard Class 38.1% (best). Late deliveries erode Order Profit Per Order via penalty costs.",
+      "Even though Standard Class is nominally the slowest mode, its 38.1% late rate is the lowest — maximizing profit by avoiding penalty cost absorption."
     ],
     "category": "inventory"
   },
   {
     "id": "GD012",
-    "question": "How can we identify high-risk suppliers using DataCo supply chain data?",
-    "ground_truth": "High-risk suppliers are identified by: (1) consistent Late_delivery_risk = 1 across their orders, (2) high cancellation rates (Order Status = CANCELED), (3) negative profit-per-order patterns indicating penalty absorption, and (4) SUSPECTED_FRAUD flags in their transaction history.",
+    "question": "How can we identify high-risk carriers using DataCo supply chain data?",
+    "ground_truth": "High-risk carriers are identified by consistently high late delivery rates on their routes. In DataCo, First Class shipping mode carriers have a 95.3% late delivery rate — the highest risk carrier segment. Second Class carriers at 76.6% are the second-highest risk. These modes should trigger automatic carrier performance reviews.",
     "contexts": [
-      "DataCo does not have an explicit supplier ID but Order Region, Market, and Shipping Mode can proxy supplier routes.",
-      "Risk scoring combines late delivery rate, cancellation rate, fraud rate, and average shipping day gap."
+      "DataCo late delivery rates by mode proxy carrier performance: First Class 95.3%, Second Class 76.6%, Same Day 45.7%, Standard Class 38.1%.",
+      "Shipping mode in DataCo acts as a proxy for carrier assignment. Modes with highest late rates identify carrier route unreliability."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD013",
-    "question": "What is the correlation between order discount rate and late delivery risk?",
-    "ground_truth": "Orders with high Order Item Discount Rate in DataCo show a slight positive correlation with late delivery risk, suggesting discounted bulk orders may be deprioritized in fulfillment or routed through slower shipping modes.",
+    "question": "What is the on-time delivery rate for Standard Class shipping in DataCo?",
+    "ground_truth": "Standard Class shipping has an on-time delivery rate of approximately 61.9% in DataCo (late delivery rate = 38.1%, so on-time = 100% - 38.1%). This makes Standard Class the most reliable shipping mode in the dataset — outperforming First Class (4.7% on-time), Second Class (23.4% on-time), and Same Day (54.3% on-time).",
     "contexts": [
-      "DataCo 'Order Item Discount Rate', 'Late_delivery_risk'. High-discount orders may use economy shipping.",
-      "Bulk discounted orders often use Standard Class shipping, which has the highest late delivery rate."
+      "DataCo late delivery rates: Standard Class 38.1% (on-time ~61.9%), Same Day 45.7% (on-time ~54.3%), Second Class 76.6% (on-time ~23.4%), First Class 95.3% (on-time ~4.7%).",
+      "Standard Class has the highest on-time delivery percentage despite being the slowest nominal mode. This counter-intuitive result reflects scheduling conservatism."
     ],
     "category": "shipment"
   },
   {
     "id": "GD014",
-    "question": "Which market has the highest average days gap between real and scheduled shipping?",
-    "ground_truth": "Africa market shows the highest average gap between Days for shipping (real) and Days for shipment (scheduled) in DataCo, followed by LATAM, due to longer last-mile delivery distances and infrastructure challenges.",
+    "question": "Which market has the highest concentration of fraud orders in DataCo?",
+    "ground_truth": "LATAM is the highest-fraud market with 1,182 SUSPECTED_FRAUD orders, closely followed by Europe with 1,172 fraud orders. The LATAM-Europe concentration pattern suggests fraud is correlated with high-volume international markets rather than geographic distance alone.",
     "contexts": [
-      "DataCo 'Market', 'Days for shipping (real)', 'Days for shipment (scheduled)'. Gap = real - scheduled.",
-      "Geographic distance and logistics infrastructure quality directly affect shipping day gaps."
+      "DataCo SUSPECTED_FRAUD count by market: LATAM 1182 (highest), Europe 1172 (second), other markets significantly lower.",
+      "LATAM edges out Europe by only 10 orders for the top fraud position. Both markets require enhanced order verification controls."
     ],
     "category": "shipment"
   },
   {
     "id": "GD015",
     "question": "How do inventory stockout patterns manifest in the DataCo dataset?",
-    "ground_truth": "Stockouts in DataCo manifest as orders with Order Status = PENDING or ON_HOLD with extended processing times, combined with high Order Item Quantity in specific categories, indicating fulfillment delays due to insufficient stock.",
+    "ground_truth": "Stockouts manifest as PENDING or ON_HOLD orders with extended processing times and high Order Item Quantity in specific categories. The 54.8% overall late delivery rate in DataCo also contributes to effective stockouts — delayed replenishment orders create downstream availability gaps even when physical inventory exists.",
     "contexts": [
-      "DataCo 'Order Status' includes PENDING, ON_HOLD. 'Order Item Quantity' shows demand volume. 'Category Name' identifies the product.",
-      "When orders remain PENDING for extended periods with no shipping date, it signals stock unavailability."
+      "DataCo 'Order Status' PENDING and ON_HOLD with high quantities indicate stockout. Overall 54.8% late rate amplifies replenishment delays.",
+      "When replenishment orders are themselves late (54.8% probability), downstream stockouts extend beyond initial stock depletion periods."
     ],
     "category": "inventory"
   },
   {
     "id": "GD016",
-    "question": "What shipping modes are most commonly used for high-value orders?",
-    "ground_truth": "High-value orders (high Sales per customer or Order Item Total) in DataCo predominantly use First Class or Second Class shipping to balance speed and cost. Same Day is used for the highest-urgency orders.",
+    "question": "What shipping modes are most commonly used for high-value orders in DataCo?",
+    "ground_truth": "High-value orders in DataCo predominantly use Second Class or First Class shipping based on historical ordering patterns. However, given First Class's 95.3% late delivery rate, First Class is a poor choice for high-value orders. Standard Class at 38.1% late provides better reliability, and Same Day (45.7% late) provides faster delivery with moderate risk.",
     "contexts": [
-      "DataCo 'Shipping Mode', 'Sales per customer', 'Order Item Total', 'Order Item Product Price'.",
-      "Higher-value customers tend to pay for premium shipping to reduce delivery risk."
+      "DataCo late delivery rates: First Class 95.3%, Second Class 76.6%, Same Day 45.7%, Standard Class 38.1%.",
+      "For high-value orders requiring reliable delivery, Standard Class (38.1% late) or Same Day are better choices than the unreliable First Class (95.3% late)."
     ],
     "category": "shipment"
   },
   {
     "id": "GD017",
-    "question": "What is the recommended action when late delivery risk is detected for a Standard Class shipment?",
-    "ground_truth": "When late delivery risk is detected for a Standard Class shipment, recommended actions include: (1) proactively notify the customer, (2) offer upgrade to First Class or Second Class at partial cost, (3) flag the supplier/carrier route for reliability review, and (4) adjust safety stock for the affected product category.",
+    "question": "What is the recommended action when late delivery risk is detected for a First Class shipment?",
+    "ground_truth": "First Class shipments have a 95.3% late delivery rate in DataCo — almost all will be late. Immediate actions: (1) proactively notify customer of likely delay, (2) consider upgrading to Same Day (45.7% late) if order value justifies cost, (3) flag the First Class carrier route for performance review, (4) increase safety stock for affected categories to buffer chronic First Class delays.",
     "contexts": [
-      "Late_delivery_risk = 1 on Standard Class requires intervention. DataCo fields inform the context: Order Region, Category Name, Customer Segment.",
-      "Proactive customer communication reduces cancellation risk. Route flagging prevents recurrence."
+      "First Class late delivery rate: 95.3% — the highest in DataCo. Nearly all First Class orders will arrive late.",
+      "Upgrading from First Class to Same Day reduces late risk from 95.3% to 45.7%. Standard Class (38.1% late) is actually more reliable than First Class for non-urgent orders."
     ],
     "category": "shipment"
   },
   {
     "id": "GD018",
-    "question": "How does the order profit ratio differ between on-time and late deliveries?",
-    "ground_truth": "On-time deliveries in DataCo have higher Order Item Profit Ratio on average. Late deliveries reduce the profit ratio due to penalty costs, expediting fees, and potential credits issued to customers.",
+    "question": "What is the fashion supply chain dataset used in this system?",
+    "ground_truth": "The fashion supply chain dataset contains 100 rows with fields including: Product Type (haircare, skincare, cosmetics), Supplier Name (Supplier 1-4), Stock Levels, Lead Time (days), Defect Rates, Transport Mode, Transportation Costs, and Revenue Generated. It complements the DataCo dataset for multi-domain supply chain analysis.",
     "contexts": [
-      "DataCo 'Order Item Profit Ratio', 'Late_delivery_risk'. Profit ratio is margin as a fraction of sales.",
-      "Late deliveries trigger additional costs that erode margins."
+      "Fashion dataset: 100 rows. Fields: Product Type, Supplier Name, Stock Levels, Lead Time, Defect Rates, Transport Mode (Air/Road/Rail/Sea), Transportation Costs, Revenue Generated.",
+      "Product types in fashion dataset: haircare, skincare, cosmetics. Suppliers: Supplier 1, 2, 3, 4. Transport modes: Air, Road, Rail, Sea."
     ],
     "category": "inventory"
   },
   {
     "id": "GD019",
-    "question": "Which customer segments are most affected by supply chain disruptions?",
-    "ground_truth": "Corporate customers are most affected by supply chain disruptions due to bulk order dependency and contractual SLAs. Consumer segment has higher volume but individual order impact is lower. Home Office segment shows high sensitivity to stockouts.",
+    "question": "Which supplier has the shortest lead time in the fashion supply chain dataset?",
+    "ground_truth": "Supplier 3 has the shortest average lead time at 14.3 days in the fashion dataset, making it the fastest supplier for replenishment. Supplier 4 has the longest average lead time at 17.0 days. Suppliers 1 and 2 fall between these extremes, making Supplier 3 the preferred choice when lead time minimization is critical.",
     "contexts": [
-      "DataCo 'Customer Segment': Consumer, Corporate, Home Office. Disruptions affect each differently.",
-      "Corporate segment orders large quantities with delivery commitments; a disruption impacts multiple downstream operations."
+      "Fashion dataset supplier lead times: Supplier 3 = 14.3 days (fastest), Supplier 4 = 17.0 days (slowest).",
+      "Lead time ranking: Supplier 3 (14.3d) < Supplier 1 ≈ Supplier 2 < Supplier 4 (17.0d). Supplier 3 offers 2.7-day advantage over the slowest supplier."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD020",
-    "question": "What is the average shipping delay for orders from the Europe market?",
-    "ground_truth": "Europe market orders in DataCo show an average shipping delay of approximately 1-3 days beyond scheduled, with Late_delivery_risk = 1 for a significant portion of orders, driven by cross-border customs and carrier variability.",
+    "question": "Which product type has the highest defect rate in the fashion supply chain dataset?",
+    "ground_truth": "Haircare products have the highest defect rate at 2.483% in the fashion dataset, followed by skincare at 2.335% and cosmetics at 1.919%. Haircare defect rates are approximately 29% higher than cosmetics, indicating it requires the most stringent quality control among the three product categories.",
     "contexts": [
-      "DataCo 'Market'='Europe', 'Days for shipping (real)', 'Days for shipment (scheduled)', 'Late_delivery_risk'.",
-      "European orders face customs clearance delays and multi-leg carrier handoffs that extend delivery times."
+      "Fashion dataset defect rates by product type: haircare 2.483% (highest), skincare 2.335%, cosmetics 1.919% (lowest).",
+      "Haircare vs cosmetics defect rate gap: 2.483% - 1.919% = 0.564 percentage points. All three categories are below 3% but haircare requires most quality attention."
     ],
-    "category": "shipment"
+    "category": "supplier_risk"
   },
   {
     "id": "GD021",
-    "question": "How should inventory levels be adjusted for high-risk shipping routes?",
-    "ground_truth": "For high-risk routes (consistently high Late_delivery_risk), safety stock should be increased by 20-30% to buffer against fulfillment delays. Order reorder points should also be advanced to account for longer effective lead times.",
+    "question": "Which transport mode has the lowest cost in the fashion supply chain dataset?",
+    "ground_truth": "Sea transport has the lowest average transportation cost at $4.97 in the fashion dataset, making it the most cost-effective mode. Air transport is the most expensive at $6.02, representing a 21% premium over sea transport. Road and Rail fall between these extremes.",
     "contexts": [
-      "High-risk routes identified from DataCo Late_delivery_risk = 1 clusters by Market and Shipping Mode.",
-      "Safety stock calculation: demand variability × lead time variability × service level factor. Higher lead time variability requires more safety stock."
+      "Fashion dataset transport costs: Sea $4.97 (cheapest), Air $6.02 (most expensive). Cost difference Air vs Sea: $1.05 per unit.",
+      "Sea transport provides 21% cost savings versus Air. For non-time-sensitive fashion supply chain shipments, Sea is the cost-optimal mode."
     ],
     "category": "inventory"
   },
   {
     "id": "GD022",
-    "question": "What are the fraud risk indicators in supply chain orders?",
-    "ground_truth": "Fraud risk indicators in DataCo include: SUSPECTED_FRAUD order status, unusually high order quantities for a single customer, orders with mismatched billing and shipping regions, and orders with maximum discount rates combined with high-value products.",
+    "question": "What are the stock level statistics in the fashion supply chain dataset?",
+    "ground_truth": "Fashion dataset stock levels: mean of 47.8 units, minimum of 0 units (stockout condition), and 25th percentile at 16.8 units. The low 25th percentile (16.8 units) means 25% of SKUs have critically low stock below 17 units. Products hitting 0 stock represent active stockout events requiring immediate reorder.",
     "contexts": [
-      "DataCo SUSPECTED_FRAUD flag in Order Status. Other signals: Order Item Quantity outliers, Customer Country vs Order Country mismatches, Order Item Discount Rate extremes.",
-      "Fraud detection requires multivariate analysis combining order value, customer history, and geographic signals."
+      "Fashion dataset stock level statistics: mean 47.8 units, minimum 0 units (stockout), 25th percentile 16.8 units.",
+      "With 25th percentile at 16.8 units, one quarter of all fashion SKUs are in a low-stock condition. Minimum of 0 confirms active stockouts occur in this dataset."
+    ],
+    "category": "inventory"
+  },
+  {
+    "id": "GD023",
+    "question": "Which supplier should be prioritized for critical haircare replenishment orders?",
+    "ground_truth": "Supplier 3 should be prioritized for critical replenishment due to the shortest lead time of 14.3 days versus Supplier 4's 17.0 days. However, given haircare's highest defect rate of 2.483%, quality verification with Supplier 3 is essential. If defect rates by supplier are available, the supplier with the best combination of short lead time and low defect rate should be selected.",
+    "contexts": [
+      "Fashion dataset: Supplier 3 lead time 14.3 days (fastest), haircare defect rate 2.483% (highest).",
+      "Critical replenishment requires fastest lead time (Supplier 3 at 14.3d) but haircare's high defect rate (2.483%) means quality checks cannot be skipped."
     ],
     "category": "supplier_risk"
   },
   {
-    "id": "GD023",
-    "question": "Which product categories show the highest late delivery risk?",
-    "ground_truth": "Electronics and high-value product categories in DataCo show the highest late delivery risk due to supply chain complexity, import restrictions, and higher theft risk requiring special handling, which slows transit.",
-    "contexts": [
-      "DataCo 'Category Name', 'Late_delivery_risk'. Electronics categories have complex fulfillment requirements.",
-      "Special handling requirements for high-value goods add processing time that extends delivery dates."
-    ],
-    "category": "shipment"
-  },
-  {
     "id": "GD024",
-    "question": "How does order quantity affect late delivery risk?",
-    "ground_truth": "Higher Order Item Quantity in DataCo correlates with increased late delivery risk because bulk orders require more warehouse processing time, special freight arrangements, and are more likely to face partial fulfillment issues.",
+    "question": "How does air transport compare to sea transport for fashion supply chain cost-benefit?",
+    "ground_truth": "Air transport costs $6.02 versus Sea's $4.97, a 21% premium ($1.05 more per unit). Air provides faster delivery but at higher cost. Given the fashion dataset's 25th percentile stock level of 16.8 units (critically low), air transport may be justified for emergency replenishment when stockout risk is imminent, while sea ($4.97) is optimal for planned replenishment.",
     "contexts": [
-      "DataCo 'Order Item Quantity', 'Late_delivery_risk'. Bulk orders have more fulfillment complexity.",
-      "Large order quantities may exceed standard carrier capacity, requiring freight upgrades that can introduce delays."
+      "Fashion dataset: Air transport $6.02, Sea transport $4.97. Difference: $1.05 (21% premium for Air).",
+      "Trade-off: Air = speed, Sea = cost savings. With 25th percentile stock at 16.8 units and minimum 0, emergency air replenishment is sometimes warranted."
     ],
     "category": "inventory"
   },
   {
     "id": "GD025",
-    "question": "What mitigation strategies reduce supplier delivery risk?",
-    "ground_truth": "Key mitigation strategies include: (1) dual-sourcing from multiple suppliers per region, (2) pre-qualifying alternative carriers for high-risk routes, (3) real-time shipment tracking with automated alerts, (4) safety stock buffers for high-risk categories, and (5) contractual SLA penalties for carriers with Late_delivery_risk patterns.",
+    "question": "What mitigation strategies reduce supplier delivery risk in fashion supply chain?",
+    "ground_truth": "Key mitigations based on fashion dataset insights: (1) prefer Supplier 3 (14.3d lead time) over Supplier 4 (17.0d) for time-sensitive replenishment; (2) implement quality gates for haircare (2.483% defect rate) and skincare (2.335%); (3) use sea transport ($4.97) for planned orders, air ($6.02) only for emergency stockouts; (4) set reorder points above the 25th percentile stock level of 16.8 units to prevent stockouts.",
     "contexts": [
-      "DataCo supplier risk signals: Late_delivery_risk, Shipping Mode, Market, Order Region.",
-      "Mitigation requires both operational buffers (safety stock) and supplier diversification strategies."
+      "Fashion dataset: Supplier 3 = 14.3d, Supplier 4 = 17.0d. Defect rates: haircare 2.483%, skincare 2.335%, cosmetics 1.919%. Transport: Sea $4.97, Air $6.02.",
+      "Reorder point should be set above the 16.8 unit 25th percentile threshold to maintain service levels and avoid the 0-unit minimum stockout conditions observed."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD026",
-    "question": "What is the significance of Days for shipping real being greater than scheduled?",
-    "ground_truth": "When Days for shipping (real) exceeds Days for shipment (scheduled) in DataCo, it directly sets Late_delivery_risk = 1. This gap represents the fulfillment failure and is the primary signal for delivery performance monitoring.",
+    "question": "What is the significance of Days for shipping real being greater than scheduled in DataCo?",
+    "ground_truth": "When Days for shipping (real) exceeds Days for shipment (scheduled), the order is marked Late_delivery_risk = 1. This affects 54.8% of all 180,519 DataCo orders. The worst offender is First Class mode where 95.3% of orders have this gap, followed by Second Class at 76.6%. The gap magnitude indicates severity: large gaps (5+ days) signal systemic carrier failure.",
     "contexts": [
-      "DataCo 'Days for shipping (real)' and 'Days for shipment (scheduled)'. Late_delivery_risk = 1 when real > scheduled.",
-      "The magnitude of the gap (1 day vs 5+ days) indicates severity. Chronic large gaps signal systemic carrier issues."
+      "DataCo: 54.8% of 180,519 orders have real shipping days > scheduled (Late_delivery_risk=1). Late rates by mode: First Class 95.3%, Second Class 76.6%.",
+      "With 54.8% overall late rate, the real-vs-scheduled gap is the majority outcome. First Class carriers are almost always late (95.3%) despite the premium designation."
     ],
     "category": "shipment"
   },
   {
     "id": "GD027",
     "question": "How do supply chain risks differ between B2B and B2C orders in DataCo?",
-    "ground_truth": "Corporate (B2B) orders in DataCo carry higher financial risk per incident due to bulk quantities and contractual obligations, while Consumer (B2C) orders have higher fraud risk and cancellation rates. Both segments face late delivery risk but with different downstream consequences.",
+    "ground_truth": "Corporate (B2B) orders carry higher financial risk per incident due to bulk quantities and SLA obligations. Consumer (B2C) orders have higher fraud exposure — LATAM (1,182 fraud orders) and Europe (1,172) show the highest fraud concentrations, which skew toward consumer market transactions. Both face the 54.8% late delivery risk but with different downstream consequences.",
     "contexts": [
-      "DataCo 'Customer Segment': Corporate=B2B, Consumer/Home Office=B2C. Risk profiles differ.",
-      "B2B disruptions cascade across downstream operations. B2C disruptions increase churn and returns."
+      "DataCo Customer Segment: Corporate=B2B, Consumer/Home Office=B2C. Fraud concentration: LATAM 1182, Europe 1172 SUSPECTED_FRAUD orders.",
+      "B2C consumer markets (LATAM, Europe) dominate fraud counts. B2B corporate disruptions cascade across downstream operations with higher per-incident cost."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD028",
-    "question": "What inventory reorder signals can be derived from DataCo order patterns?",
-    "ground_truth": "Reorder signals in DataCo: sustained PENDING/ON_HOLD order status in a category, increasing Days for shipping (real) suggesting supply tightness, declining Order Item Quantity availability, and rising Order Item Product Price indicating scarcity.",
+    "question": "What inventory reorder signals can be derived from DataCo and fashion dataset patterns?",
+    "ground_truth": "Reorder signals: (1) DataCo PENDING/ON_HOLD order backlogs in a category; (2) fashion dataset stock levels at or below the 25th percentile threshold of 16.8 units; (3) fashion dataset minimum stock = 0 indicates active stockout; (4) DataCo 54.8% late delivery rate means replenishment orders themselves are frequently delayed — advance reorder timing by at least 2-3 days.",
     "contexts": [
-      "DataCo 'Order Status', 'Order Item Quantity', 'Order Item Product Price', 'Category Name'.",
-      "Price increases combined with order delays are leading indicators of supply-demand imbalance requiring inventory replenishment."
+      "Fashion stock levels: mean 47.8, min 0 (stockout), 25th pct 16.8. DataCo: 54.8% of replenishment orders are late.",
+      "Combined insight: reorder when stock drops toward 16.8 units AND account for 54.8% chance the replenishment order will be late."
     ],
     "category": "inventory"
   },
   {
     "id": "GD029",
-    "question": "Which shipping mode should be recommended for high-value, time-sensitive orders?",
-    "ground_truth": "First Class shipping is recommended for high-value time-sensitive orders as a balance between cost and speed, achieving near-Same Day reliability at lower cost. Same Day should be reserved for critical emergency replenishment orders.",
+    "question": "Which shipping mode should be recommended for high-value, time-sensitive orders in DataCo?",
+    "ground_truth": "Counterintuitively, Standard Class (38.1% late rate) is the most reliable shipping mode in DataCo. For time-sensitive high-value orders, Same Day (45.7% late) provides faster fulfillment but with slightly higher late risk. First Class (95.3% late) should be avoided entirely — it combines high cost with the worst reliability in the dataset.",
     "contexts": [
-      "DataCo 'Shipping Mode': Same Day (fastest, highest cost), First Class (fast, moderate cost), Second Class, Standard Class.",
-      "First Class achieves high on-time rates with manageable cost overhead for high-value order protection."
+      "DataCo late delivery rates: Standard Class 38.1% (best on-time), Same Day 45.7%, Second Class 76.6%, First Class 95.3% (worst).",
+      "Recommendation: avoid First Class entirely. Use Standard Class for reliable on-time performance or Same Day for fastest available delivery with moderate (45.7%) late risk."
     ],
     "category": "shipment"
   },
   {
     "id": "GD030",
     "question": "How should a risk intelligence system prioritize alerts for supply chain disruptions?",
-    "ground_truth": "Alert prioritization should be: HIGH severity for SUSPECTED_FRAUD orders or orders with Late_delivery_risk=1 + high customer value + Corporate segment; MEDIUM for standard late deliveries in Consumer segment; LOW for informational flags like discount rate anomalies. HIGH severity should trigger human-in-the-loop review.",
+    "ground_truth": "Alert prioritization: HIGH severity for SUSPECTED_FRAUD (LATAM/Europe highest risk with 1,182 and 1,172 orders) or First Class orders (95.3% late — near-certain delay), MEDIUM for Second Class (76.6% late) and Same Day (45.7%), LOW for Standard Class (38.1% late — most reliable). HIGH severity triggers Human-in-the-Loop review before automated response.",
     "contexts": [
-      "Severity classification uses DataCo fields: Order Status, Late_delivery_risk, Customer Segment, Order Item Total.",
-      "HILT (Human-in-the-Loop) intervention is warranted for HIGH severity to prevent financial loss."
+      "DataCo fraud concentration: LATAM 1182, Europe 1172. Late rates: First Class 95.3%, Second Class 76.6%, Same Day 45.7%, Standard Class 38.1%.",
+      "HILT (Human-in-the-Loop) triggers interrupt_before('recommendation') for HIGH severity: fraud orders in LATAM/Europe or First Class orders with near-certain late delivery."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD031",
-    "question": "What is the impact of seasonal demand spikes on inventory stockout risk?",
-    "ground_truth": "Seasonal demand spikes in DataCo show as sudden increases in Order Item Quantity within specific Category Names and time windows. These periods correlate with higher Late_delivery_risk and PENDING order backlogs, indicating insufficient pre-positioned inventory.",
+    "question": "What is the defect rate comparison across product types in the fashion supply chain?",
+    "ground_truth": "Fashion dataset defect rates: haircare has the highest at 2.483%, skincare at 2.335%, and cosmetics the lowest at 1.919%. The 0.564 percentage point spread between haircare and cosmetics represents a significant quality gap requiring different quality control protocols. All categories are below 3% but haircare needs the most rigorous inspection process.",
     "contexts": [
-      "DataCo 'order date (DateOrders)', 'Order Item Quantity', 'Category Name'. Seasonal patterns emerge in time-series analysis.",
-      "Pre-positioning inventory before peak seasons reduces stockout risk and shipping pressure."
+      "Fashion dataset defect rates: haircare 2.483% > skincare 2.335% > cosmetics 1.919%.",
+      "Haircare defect rate is 29.4% higher than cosmetics (2.483 / 1.919 = 1.294). Skincare is 21.7% higher than cosmetics. Quality effort should scale accordingly."
     ],
     "category": "inventory"
   },
   {
     "id": "GD032",
     "question": "What are common causes of order cancellations in the DataCo supply chain?",
-    "ground_truth": "Order cancellations in DataCo (Order Status = CANCELED) are primarily caused by: (1) excessive shipping delays (real days >> scheduled), (2) SUSPECTED_FRAUD detection, (3) out-of-stock situations causing PENDING backlogs that customers abandon, and (4) payment failures in PENDING_PAYMENT orders.",
+    "ground_truth": "Order cancellations in DataCo (CANCELED status) are primarily caused by: (1) excessive shipping delays — First Class mode has 95.3% late rate triggering cancellations; (2) SUSPECTED_FRAUD detection — LATAM (1,182) and Europe (1,172) have highest fraud-triggered cancellations; (3) PENDING backlogs indicating stockout; (4) PENDING_PAYMENT payment failures. The 54.8% overall late rate is the dominant cancellation driver.",
     "contexts": [
-      "DataCo 'Order Status': CANCELED correlates with other fields. Days gap, fraud flags, and payment status drive cancellations.",
-      "Each cancellation cause requires a different mitigation: shipping = carrier SLA, fraud = verification, stockout = inventory buffer."
+      "DataCo cancellation drivers: First Class 95.3% late rate, SUSPECTED_FRAUD (LATAM 1182, Europe 1172), overall 54.8% late delivery.",
+      "With 54.8% of all orders late, shipping delay is the primary cause of DataCo cancellations — affecting more than half the order base."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD033",
     "question": "How does geographic distance affect supply chain risk in DataCo?",
-    "ground_truth": "Geographic distance (approximated by Market and Order Region in DataCo) positively correlates with Late_delivery_risk and shipping day gaps. Orders shipped internationally (especially Africa, LATAM) face longer transit, more carrier handoffs, and higher risk of loss or delay.",
+    "ground_truth": "Geographic concentration of risk is visible in DataCo's fraud data: LATAM (1,182 fraud orders) and Europe (1,172) dominate SUSPECTED_FRAUD — both are major international markets. Late delivery rates are also elevated internationally. Africa market shipping faces longest transit with highest average day gaps due to infrastructure limitations and multi-leg routing.",
     "contexts": [
-      "DataCo 'Market', 'Order Region', 'Order Country', 'Days for shipping (real)', 'Late_delivery_risk'.",
-      "International orders traverse multiple logistics networks, each adding variability to final delivery time."
+      "DataCo fraud by market: LATAM 1182, Europe 1172 SUSPECTED_FRAUD. International markets face both fraud and late delivery risks.",
+      "Geographic distance correlates with late delivery risk and fraud exposure in DataCo. LATAM and Europe represent the highest-risk international market combination."
     ],
     "category": "shipment"
   },
   {
     "id": "GD034",
     "question": "What KPIs should a supply chain risk dashboard display?",
-    "ground_truth": "Key KPIs from DataCo: (1) Late Delivery Rate = count(Late_delivery_risk=1) / total orders, (2) Cancellation Rate = count(CANCELED) / total, (3) Fraud Rate = count(SUSPECTED_FRAUD) / total, (4) Average Shipping Day Gap, (5) On-Hold Order Backlog count, (6) Average Order Profit Per Order by Shipping Mode.",
+    "ground_truth": "Key KPIs from actual dataset values: (1) Late Delivery Rate = 54.8% overall (DataCo, 180,519 orders); (2) Late Rate by Mode: First Class 95.3%, Second Class 76.6%, Same Day 45.7%, Standard Class 38.1%; (3) Fraud Rate by Market: LATAM 1,182, Europe 1,172 SUSPECTED_FRAUD; (4) Fashion Stock Risk: 25th pct 16.8 units, min 0 (active stockout); (5) Defect Rate: haircare 2.483%, skincare 2.335%, cosmetics 1.919%.",
     "contexts": [
-      "DataCo fields support all these KPIs. Late_delivery_risk, Order Status variants, Days gap, Order Profit Per Order.",
-      "Dashboard KPIs should be filterable by Market, Customer Segment, and Category for drill-down analysis."
+      "DataCo KPIs: 54.8% late overall, mode-level late rates, LATAM/Europe fraud counts. Fashion KPIs: stock levels (mean 47.8, min 0), defect rates by product type.",
+      "Dashboard should surface: overall 54.8% late rate prominently as headline metric, with drill-down by mode showing First Class 95.3% as critical alert."
     ],
     "category": "inventory"
   },
   {
     "id": "GD035",
     "question": "How can machine learning improve late delivery prediction in supply chain?",
-    "ground_truth": "ML models trained on DataCo features (Shipping Mode, Market, Order Item Quantity, Benefit per order, Category Name, Customer Segment) can predict Late_delivery_risk with high accuracy. Gradient boosting models achieve strong performance on this binary classification task.",
+    "ground_truth": "ML models trained on DataCo (180,519 rows) can use Shipping Mode as the strongest predictor: First Class alone predicts 95.3% late, Standard Class predicts 38.1% late. Combined with Market (LATAM/Europe for fraud), Order Item Quantity, and Customer Segment, gradient boosting models achieve strong binary classification (Late_delivery_risk=0/1) accuracy on this dataset.",
     "contexts": [
-      "DataCo 'Late_delivery_risk' is the target for ML prediction. Features include all categorical and numeric fields.",
-      "Predictive models enable proactive intervention before late deliveries occur, rather than reactive response."
+      "DataCo features for ML: Shipping Mode (First Class=95.3% late, Standard=38.1%), Market (LATAM/Europe high fraud), Order Item Quantity, Customer Segment.",
+      "With 54.8% class imbalance (more late than on-time), models trained on DataCo should be evaluated with F1/AUC rather than accuracy to avoid majority-class bias."
     ],
     "category": "shipment"
   },
   {
     "id": "GD036",
-    "question": "What is the recommended safety stock formula for high-risk supply routes?",
-    "ground_truth": "Safety stock = Z × σ_LT × D_avg + Z × L_avg × σ_D, where Z is the service level z-score (e.g., 1.65 for 95%), σ_LT is lead time standard deviation (from Days for shipping real variance in DataCo), D_avg is average daily demand, L_avg is average lead time, σ_D is demand standard deviation.",
+    "question": "What is the lead time advantage of Supplier 3 over Supplier 4 in the fashion dataset?",
+    "ground_truth": "Supplier 3 has a 14.3-day lead time versus Supplier 4's 17.0 days, giving Supplier 3 a 2.7-day advantage (15.9% faster). For products with stock levels near the 25th percentile threshold of 16.8 units, this 2.7-day difference can determine whether a stockout occurs while waiting for replenishment.",
     "contexts": [
-      "DataCo 'Days for shipping (real)' provides lead time data. Order Item Quantity over time approximates demand.",
-      "For high-risk routes (Late_delivery_risk = 1 rate > 30%), use 99% service level (Z=2.33) in the formula."
+      "Fashion dataset: Supplier 3 lead time 14.3 days, Supplier 4 lead time 17.0 days. Difference: 2.7 days (15.9% faster for Supplier 3).",
+      "Context: fashion 25th percentile stock = 16.8 units, min = 0. A 2.7-day faster replenishment from Supplier 3 is material when stock is critically low."
     ],
-    "category": "inventory"
+    "category": "supplier_risk"
   },
   {
     "id": "GD037",
-    "question": "How should a multi-agent system route a shipment delay query?",
-    "ground_truth": "A shipment delay query should be routed by the Orchestrator agent to the Shipment Analysis specialist, which retrieves relevant DataCo incidents (Late_delivery_risk=1 cases for the relevant Market/Mode), applies CRAG if retrieval confidence is low, and passes enriched context to the Recommendation agent for actionable output.",
+    "question": "How should a multi-agent system route a shipment delay query about First Class mode?",
+    "ground_truth": "A First Class shipment delay query routes to the Shipment Analysis specialist agent via the Orchestrator. The agent retrieves DataCo incidents where First Class mode has Late_delivery_risk=1 (95.3% of all First Class orders). Given the near-universal late rate, the Recommendation agent should always classify First Class delays as HIGH severity and suggest carrier route review.",
     "contexts": [
-      "LangGraph agents: Orchestrator classifies intent as 'shipment', routes to Shipment Analysis agent.",
-      "Shipment Analysis uses hybrid retrieval (ChromaDB + BM25 + RRF + reranker) to find similar historical incidents from DataCo-derived documents."
+      "LangGraph: Orchestrator classifies 'shipment delay' → ShipmentAnalysisAgent. First Class late rate: 95.3% in DataCo (180,519 rows).",
+      "First Class 95.3% late rate means this is not an isolated incident — it is a systemic pattern requiring HIGH severity alert and carrier replacement recommendation."
     ],
     "category": "shipment"
   },
   {
     "id": "GD038",
-    "question": "What does a high Order Item Profit Ratio variance signal in supply chain?",
-    "ground_truth": "High variance in Order Item Profit Ratio across orders of the same product category signals pricing inconsistency, excessive discounting, or hidden cost absorption (e.g., expediting fees from late deliveries). It warrants a cost audit of the affected category.",
+    "question": "What does the advance shipping rate in DataCo indicate for supply chain management?",
+    "ground_truth": "23% of DataCo orders are shipped in advance of schedule. Combined with the 54.8% late delivery rate, this means only about 22% of orders are truly on-time. The 23% advance rate suggests some carriers over-promise delivery windows. Advance deliveries, while positive for customers, can indicate conservative scheduling that masks actual carrier performance issues.",
     "contexts": [
-      "DataCo 'Order Item Profit Ratio' = profit / sales. High variance in a Category Name signals financial control issues.",
-      "Variance analysis compares ratio distribution across Shipping Modes and Markets to isolate cost drivers."
+      "DataCo delivery status: 54.8% Late, 23% Advance, ~22% on-time. Total 180,519 orders.",
+      "23% advance delivery rate suggests scheduled days are set conservatively for some modes. True on-time performance window is narrow at approximately 22% of orders."
     ],
     "category": "inventory"
   },
   {
     "id": "GD039",
-    "question": "Which order statuses require immediate supply chain intervention?",
-    "ground_truth": "Immediate intervention required for: (1) SUSPECTED_FRAUD — freeze and verify order, (2) ON_HOLD — investigate hold reason and release or cancel, (3) CANCELED with high order value — attempt recovery and root cause analysis. PENDING_PAYMENT requires customer follow-up rather than supply chain intervention.",
+    "question": "Which order statuses require immediate supply chain intervention in DataCo?",
+    "ground_truth": "Immediate intervention required: (1) SUSPECTED_FRAUD — freeze order, highest concentration in LATAM (1,182) and Europe (1,172); (2) ON_HOLD — investigate and release or cancel; (3) CANCELED high-value — root cause and recovery attempt; (4) any First Class order — 95.3% late rate means proactive customer notification is required for virtually every First Class order placed.",
     "contexts": [
-      "DataCo 'Order Status': SUSPECTED_FRAUD, ON_HOLD, CANCELED are actionable statuses requiring supply chain response.",
-      "Severity of intervention scales with Order Item Total and Customer Segment (Corporate > Consumer)."
+      "DataCo intervention triggers: SUSPECTED_FRAUD (LATAM 1182, Europe 1172), ON_HOLD, CANCELED, and all First Class orders (95.3% late).",
+      "First Class mode is effectively a system-level intervention trigger — with 95.3% late rate, every First Class order requires proactive customer communication."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD040",
     "question": "How does the RAG system retrieve relevant supply chain incidents for a user query?",
-    "ground_truth": "The RAG pipeline converts DataCo rows into incident documents, embeds them with BAAI/bge-small-en-v1.5 (384d), stores in ChromaDB, and at query time performs: (1) dense retrieval top-20, (2) BM25 sparse retrieval top-20, (3) RRF fusion, (4) cross-encoder reranking to top-5, (5) CRAG query reformulation if max relevance < 0.6.",
+    "ground_truth": "The RAG pipeline converts DataCo (180,519 rows) and fashion (100 rows) data into incident documents, embeds with BAAI/bge-small-en-v1.5 (384-dim fastembed), stores in ChromaDB, and at query time: (1) dense retrieval top-20, (2) BM25 sparse top-20, (3) RRF fusion, (4) cross-encoder reranking to top-5, (5) CRAG if max reranked score < 0.6. This hybrid approach captures both semantic and keyword relevance.",
     "contexts": [
-      "Hybrid retrieval: ChromaDB cosine + BM25 over incident corpus → RRF (k=60) → ms-marco-MiniLM-L-6-v2 reranker → top-5 context.",
-      "CRAG threshold 0.6: if reranked top score < 0.6, query is reformulated and retrieval retried."
+      "Hybrid retrieval: ChromaDB cosine + BM25 over DataCo (180,519) and fashion (100) corpus → RRF (k=60) → reranker → top-5 context.",
+      "CRAG threshold 0.6: if best reranked score < 0.6 after retrieval over 180,619 total documents, query is reformulated and retrieval retried."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD041",
     "question": "What are the key differences between supplier risk and shipment risk in supply chain?",
-    "ground_truth": "Supplier risk (vendor reliability, lead times, quality defects) is upstream and affects procurement. Shipment risk (carrier delays, routing failures, Late_delivery_risk) is downstream and affects fulfillment. DataCo primarily captures shipment risk signals; supplier risk is inferred from order status patterns and shipping day gaps.",
+    "ground_truth": "Shipment risk in DataCo is clearly quantified: 54.8% late rate overall, First Class 95.3% late. Supplier risk is inferred: LATAM (1,182 fraud) and Europe (1,172 fraud) signal supplier/market-level reliability gaps. Fashion dataset provides direct supplier data: Supplier 4 (17.0d lead time) vs Supplier 3 (14.3d) and defect rates quantify quality-based supplier risk.",
     "contexts": [
-      "DataCo fields map to shipment risk: Late_delivery_risk, Days gap, Shipping Mode. Supplier risk is inferred from patterns.",
-      "Supplier Risk agent focuses on vendor-level patterns; Shipment Analysis agent focuses on carrier and route-level patterns."
+      "Shipment risk (DataCo): 54.8% late, First Class 95.3%, Second Class 76.6%. Supplier risk (fashion): Supplier 3 14.3d vs Supplier 4 17.0d, defect rates haircare 2.483%.",
+      "DataCo captures shipment/carrier risk. Fashion dataset captures supplier reliability (lead time, defect rate). Together they provide complete supply chain risk picture."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD042",
     "question": "How should inventory be allocated across regions to minimize late delivery risk?",
-    "ground_truth": "Inventory should be pre-positioned closer to high-demand markets (Europe, USCA per DataCo volume) to reduce shipping distance and Late_delivery_risk. For high-risk markets (Africa, LATAM), regional distribution centers reduce dependency on long-haul Standard Class shipping.",
+    "ground_truth": "Pre-position inventory in LATAM and Europe to reduce both late delivery exposure and fraud risk (LATAM 1,182 fraud orders, Europe 1,172). For fashion products, maintain stock above the 16.8-unit 25th percentile threshold, preferring Supplier 3 (14.3d lead time) for replenishment. Standard Class shipping (38.1% late) should be used for regional distribution over First Class (95.3% late).",
     "contexts": [
-      "DataCo 'Market', 'Order Region', 'Late_delivery_risk'. Regional demand patterns inform distribution strategy.",
-      "Placing inventory closer to demand reduces transit time, directly lowering Late_delivery_risk rates."
+      "DataCo: LATAM and Europe highest fraud. Fashion: stock 25th pct 16.8 units, Supplier 3 14.3d lead time. Standard Class 38.1% late vs First Class 95.3% late.",
+      "Regional pre-positioning in high-risk markets (LATAM, Europe) combined with Supplier 3 replenishment and Standard Class distribution minimizes compounded late and fraud risk."
     ],
     "category": "inventory"
   },
   {
     "id": "GD043",
     "question": "What response should the system generate for a HIGH severity supplier alert?",
-    "ground_truth": "For HIGH severity (fraud, large-value late delivery, corporate SLA breach): (1) interrupt agent graph before recommendation (HILT), (2) surface alert to human reviewer with full context (order details, customer segment, financial impact), (3) await approval before dispatching automated response, (4) log incident to feedback store for audit trail.",
+    "ground_truth": "For HIGH severity (SUSPECTED_FRAUD in LATAM/Europe, or First Class orders with near-certain 95.3% late delivery): (1) interrupt LangGraph before recommendation node (HILT), (2) surface full context to human reviewer — order details, market (LATAM/Europe fraud flag), mode (First Class late rate), financial impact; (3) await human approval; (4) log to feedback store. HILT prevents automated responses on fraud or near-certain delay scenarios.",
     "contexts": [
-      "HILT triggers interrupt_before('recommendation') on HIGH severity. Human reviewer sees full LangGraph state.",
-      "HIGH severity threshold: SUSPECTED_FRAUD OR (Late_delivery_risk=1 AND Customer Segment=Corporate AND Order Item Total > threshold)."
+      "HIGH severity triggers: SUSPECTED_FRAUD (LATAM 1182, Europe 1172) or First Class mode (95.3% late). HILT via interrupt_before('recommendation').",
+      "Human reviewer sees: market fraud context, shipping mode late rate (95.3% for First Class), order value, customer segment before approving recommendation dispatch."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD044",
     "question": "What metrics validate the quality of the RAG retrieval system?",
-    "ground_truth": "RAG quality is validated by: Context Precision (relevant docs in top-k / total retrieved), Context Recall (relevant docs retrieved / total relevant), Answer Faithfulness (answer claims grounded in retrieved context), and Answer Relevancy (answer addresses the question). Target thresholds: Precision > 0.75, Recall > 0.70, Faithfulness > 0.80.",
+    "ground_truth": "RAG quality validated by: Context Precision (relevant docs in top-5 / 5), Context Recall (relevant DataCo/fashion docs retrieved), Answer Faithfulness (answer grounded in retrieved DataCo incidents — e.g., 54.8% late rate, LATAM 1,182 fraud), Answer Relevancy (answer addresses query). Target: Precision > 0.75, Recall > 0.70, Faithfulness > 0.80 using RAGAS and DeepEval against the 50-question golden dataset.",
     "contexts": [
-      "RAGAS metrics: Context Precision, Context Recall, Answer Faithfulness evaluated against golden dataset.",
-      "DeepEval: Faithfulness, AnswerRelevancy, ContextualPrecision, ContextualRecall, Hallucination score."
+      "RAGAS metrics evaluated against 50 Q&A golden dataset grounded in DataCo (180,519 rows) and fashion (100 rows) actual values.",
+      "Faithfulness specifically checks: does the answer cite real numbers (54.8% late, First Class 95.3%, LATAM 1182 fraud) from retrieved context, not hallucinated values?"
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD045",
     "question": "How does the LangGraph orchestrator decide which specialist agent to invoke?",
-    "ground_truth": "The Orchestrator uses llama-3.1-8b-instant (Groq) to classify query intent into: supplier_risk, shipment, inventory, or general. It then routes via conditional edges: supplier_risk → SupplierRiskAgent, shipment → ShipmentAnalysisAgent, inventory → InventoryIntelligenceAgent. Severity is also classified to set HILT flag.",
+    "ground_truth": "The Orchestrator uses llama-3.1-8b-instant (Groq) to classify query intent: supplier_risk → SupplierRiskAgent (handles LATAM/Europe fraud patterns, supplier lead times), shipment → ShipmentAnalysisAgent (handles First Class 95.3% late, mode comparisons), inventory → InventoryIntelligenceAgent (handles stock levels, defect rates). Severity is also classified to set HILT flag.",
     "contexts": [
-      "LangGraph conditional edges on orchestrator output. Intent classification uses Groq 8B for speed.",
-      "Orchestrator state carries: intent, severity, original_query, session_id. Specialist agents receive this state and enrich it with retrieved context."
+      "LangGraph orchestrator routes by intent. Supplier risk queries get fashion dataset supplier data (Supplier 3 14.3d, defect rates). Shipment queries get DataCo mode analysis (First Class 95.3% late).",
+      "Intent classification accuracy is critical: a fraud query (LATAM 1182) must route to supplier_risk, not shipment, to retrieve the correct fraud-related incidents."
     ],
     "category": "shipment"
   },
   {
     "id": "GD046",
     "question": "What happens when the semantic cache hits for a supply chain query?",
-    "ground_truth": "When semantic cache hits (cosine similarity to a cached query embedding > 0.92 threshold), the system returns the cached response immediately without invoking LangGraph agents or retrieval, reducing latency from ~3-5s to <100ms. Cache stores up to 500 entries with LRU eviction.",
+    "ground_truth": "When semantic cache hits (cosine similarity ≥ 0.92 to a cached query embedding), the system returns the cached response immediately without invoking LangGraph or retrieval over the 180,619-document corpus. This reduces latency from ~3-5s to <100ms. Cache stores up to 500 entries with LRU eviction. Particularly useful for repeated mode-specific queries like 'First Class late rate' (95.3%).",
     "contexts": [
-      "Semantic cache threshold 0.92. Cache max items 500. Hit returns cached response directly.",
-      "Cache is checked before guardrails pass to LangGraph. This prevents redundant retrieval for near-duplicate queries."
+      "Semantic cache threshold 0.92. Cache max 500 entries. Hit returns cached response bypassing full DataCo/fashion retrieval pipeline.",
+      "Common repeated queries about known statistics (54.8% late rate, LATAM fraud count) benefit most from caching as their answers are stable."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD047",
     "question": "What is CRAG and when is it triggered in the retrieval pipeline?",
-    "ground_truth": "CRAG (Corrective RAG) is triggered when the maximum relevance score from the cross-encoder reranker is below 0.6. It reformulates the original query using the LLM to generate an alternative phrasing, then repeats the full retrieval pipeline with the new query to improve context quality.",
+    "ground_truth": "CRAG (Corrective RAG) triggers when the maximum cross-encoder reranker score across the top-5 retrieved documents falls below 0.6. It uses the LLM to reformulate the query and retries the full hybrid retrieval pipeline. For example, a vague query about 'delivery problems' might be reformulated to 'First Class late delivery rate DataCo shipping mode' to better match the 95.3% late rate documents.",
     "contexts": [
-      "CRAG threshold: crag_relevance_threshold = 0.6. Triggered when top reranked score < threshold.",
-      "Query reformulation uses gpt-4o-mini to generate alternative query phrasings that may retrieve better-matching documents."
+      "CRAG threshold: rerank score < 0.6 triggers query reformulation. Retrieval corpus: DataCo (180,519) + fashion (100) = 180,619 documents.",
+      "CRAG reformulation example: 'supply chain issues' → 'late delivery risk by shipping mode DataCo Standard First Class' to retrieve specific mode-level statistics."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD048",
-    "question": "How are late delivery patterns across shipping modes visualized in the system?",
-    "ground_truth": "The frontend Flow page renders a live DAG of the LangGraph pipeline with node status and timing. The Chat page includes a split-view FlowViz panel showing retrieval stats, CRAG activation, and agent execution flow. The Presentation page provides slide-based architecture and metrics overview.",
+    "question": "How are supply chain metrics visualized in the frontend?",
+    "ground_truth": "The frontend Flow page renders a live LangGraph DAG with node status/timing and a right-panel Run Quality dashboard showing: composite 0-100 quality score (faithfulness 40pts + retrieval score×30pts + no-CRAG-retry 20pts + no-PII 10pts), retrieval stats (docs retrieved, max score, latency), CRAG retry count, faithfulness result with reason from Groq judge, techniques used, and total elapsed time.",
     "contexts": [
-      "Frontend: React + Vite + Tailwind. /flow route = full-screen DAG with live event bus. /present = slide deck.",
-      "FlowViz component shows: node status (pending/running/complete), timing, retrieval hit/miss, CRAG fired, HILT triggered."
+      "Frontend Flow page right panel: Run Quality score (0-100), faithfulness badge, retrieval docs/score/ms, CRAG retries, elapsed time, active techniques (Hybrid Retrieval, BM25, CRAG, HILT, Semantic Cache, Reranker).",
+      "Quality score formula: faithful=true adds 40pts, retrieval_score×30 adds up to 30pts, no CRAG retry adds 20pts, no PII adds 10pts. Maximum = 100."
     ],
     "category": "shipment"
   },
   {
     "id": "GD049",
     "question": "What is the role of LangSmith in the supply chain risk intelligence system?",
-    "ground_truth": "LangSmith provides end-to-end tracing for every LangGraph run, capturing: input query, agent invocations, LLM prompts and responses, retrieval context, and final output. It enables debugging, latency analysis, and quality monitoring for the multi-agent pipeline.",
+    "ground_truth": "LangSmith provides end-to-end tracing for every LangGraph run over DataCo and fashion dataset retrievals, capturing: input query, agent invocations (Orchestrator, SupplierRisk, ShipmentAnalysis, InventoryIntelligence), LLM calls (Groq 8B for routing, GPT-4o-mini for generation), retrieval context from 180,619 documents, and final recommendation. Enables debugging of CRAG reformulations and HILT triggers.",
     "contexts": [
-      "LangSmith tracing: LANGCHAIN_TRACING_V2=true. Project: supply-chain-risk-assistant. All LangChain/LangGraph calls are automatically traced.",
-      "LangSmith traces show the full execution graph including tool calls, token counts, and latency per agent."
+      "LangSmith: LANGCHAIN_TRACING_V2=true, project=supply-chain-risk-assistant. Traces every agent call, retrieval, and LLM inference.",
+      "LangSmith traces show: which specialist agent was invoked, whether CRAG fired, whether HILT interrupted, token counts per LLM call, and total pipeline latency."
     ],
     "category": "supplier_risk"
   },
   {
     "id": "GD050",
-    "question": "What should the system recommend when inventory stockout risk is detected for a key product?",
-    "ground_truth": "When stockout risk is detected: (1) trigger emergency purchase order to primary supplier, (2) activate secondary/backup supplier if lead time is critical, (3) notify affected corporate customers proactively with revised delivery dates, (4) temporarily halt discount promotions on the affected SKU, (5) adjust demand forecast model with the stockout event data.",
+    "question": "What should the system recommend when fashion inventory stockout risk is detected?",
+    "ground_truth": "When fashion inventory stockout is detected (stock at or below 16.8-unit 25th percentile threshold or hitting 0): (1) trigger emergency purchase order to Supplier 3 (fastest at 14.3d lead time); (2) use Air transport ($6.02) for critical replenishment despite 21% premium over Sea ($4.97); (3) apply extra QA for haircare orders (2.483% defect rate — highest risk); (4) notify affected customers with revised dates; (5) set reorder point above 16.8 units going forward.",
     "contexts": [
-      "Inventory Intelligence agent detects stockout signals from DataCo order patterns (PENDING backlog, rising prices, low availability).",
-      "Recommendation agent synthesizes specialist findings into prioritized action list with supplier and customer communication steps."
+      "Fashion dataset: stock min 0 (active stockout), 25th pct 16.8 units. Fastest supplier: Supplier 3 at 14.3 days. Emergency transport: Air $6.02. Haircare defect risk: 2.483%.",
+      "Reorder trigger at 16.8 units with Supplier 3 (14.3d) ensures replenishment arrives before stockout at 0. Air transport justified for haircare/skincare emergency replenishment given high defect rate requiring buffer stock."
     ],
     "category": "inventory"
   }

@@ -2,6 +2,11 @@
   "supply_chain_data.csv": {
     "rows": 100,
     "docs": 100,
-    "loaded_at": 1780171111.3144374
+    "loaded_at": 1780216022.1905525
+  },
+  "DataCo SMART SUPPLY CHAIN FOR BIG DATA ANALYSIS/DataCoSupplyChainDataset.csv": {
+    "rows": 180519,
+    "docs": 180519,
+    "loaded_at": 1780225394.457943
   }
 }
