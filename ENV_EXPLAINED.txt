@@ -1,0 +1,385 @@
+ENV VARIABLES — WHAT THEY ARE AND WHY WE NEED THEM
+=====================================================
+This file is for personal learning only.
+Every key in .env explained in plain language.
+
+
+==============================================================
+LLM PROVIDERS
+==============================================================
+
+OPENAI_API_KEY=learner027
+    WHAT: The password/credential to access OpenAI's API.
+    WHY:  Our system uses GPT-4o-mini as the primary LLM for generating
+          recommendations and reformulating CRAG queries. Without this key,
+          OpenAI will reject every request with a 401 Unauthorized error.
+    NOTE: In our case this is a gateway key (learner027), not a real OpenAI key.
+          It works because of OPENAI_BASE_URL pointing to the custom gateway.
+
+OPENAI_BASE_URL=https://keygateway.arshnivlabs.com
+    WHAT: Overrides the default OpenAI API URL.
+    WHY:  Instead of hitting api.openai.com directly, all OpenAI calls go through
+          the Arshniv Labs key gateway. The gateway manages billing and rate limits
+          on behalf of learners. If this is blank, the Python SDK hits OpenAI directly.
+    NOTE: This is why OPENAI_API_KEY is "learner027" and not a real sk-... key.
+          The gateway accepts this learner credential and forwards to real OpenAI.
+
+OPENAI_MODEL=gpt-4o-mini
+    WHAT: Which OpenAI model to use.
+    WHY:  GPT-4o-mini is fast and cheap. We use it for the Recommendation agent
+          (final answer generation) and CRAG query reformulation. You could swap
+          to gpt-4o for better quality at higher cost.
+
+GROQ_API_KEY=
+    WHAT: API key for Groq (free, very fast LLM inference).
+    WHY:  We use Groq for two things:
+          1. Orchestrator routing (llama-3.1-8b-instant — classifies query intent fast)
+          2. Faithfulness check (acts as LLM judge to verify the answer is grounded)
+          Also acts as a fallback if OpenAI fails.
+    NOTE: Currently blank — system still works but fallback chain is limited to OpenAI only.
+          Get a free key at console.groq.com.
+
+GROQ_MODEL_SMALL=llama-3.1-8b-instant
+    WHAT: The smaller/faster Groq model name.
+    WHY:  Used by the Orchestrator for intent classification (supplier_risk / shipment /
+          inventory). Speed matters here — this runs on every single query before
+          any retrieval happens. 8B parameters = very fast.
+
+GROQ_MODEL_LARGE=llama-3.3-70b-versatile
+    WHAT: The larger/smarter Groq model name.
+    WHY:  Used as mid-tier fallback if GPT-4o-mini fails. 70B parameters gives
+          better reasoning than 8B but is slower. Still free on Groq's free tier.
+
+LLM_FALLBACK_CHAIN=openai_mini,groq_large,groq_small
+    WHAT: The order in which LLMs are tried if one fails.
+    WHY:  Resilience. If OpenAI is down or rate-limited, the system automatically
+          tries Groq Large next, then Groq Small. This prevents the entire app
+          from crashing just because one LLM provider has an outage.
+          Think of it like: try Plan A → if fails try Plan B → if fails try Plan C.
+
+
+==============================================================
+EMBEDDINGS & RERANKER
+==============================================================
+
+EMBEDDING_PROVIDER=fastembed
+    WHAT: Which library/provider to use for converting text into vectors.
+    WHY:  There are two options:
+          - fastembed: Runs locally on your machine using an ONNX model. FREE.
+          - openai: Calls OpenAI's embedding API. Costs money per token.
+          We use fastembed so no API cost is incurred during ingestion.
+
+FASTEMBED_MODEL=BAAI/bge-small-en-v1.5
+    WHAT: The specific embedding model file to download and use.
+    WHY:  BAAI/bge-small-en-v1.5 is a well-known small English embedding model.
+          It produces 384-dimensional vectors — a good balance of quality vs speed.
+          "Small" here means the model file is small (~130MB), not that it's low quality.
+
+EMBEDDING_DIM=384
+    WHAT: The size (number of dimensions) of each embedding vector.
+    WHY:  ChromaDB needs to know the vector size upfront when creating the collection.
+          BAAI/bge-small-en-v1.5 always produces 384-dim vectors, so we set this to 384.
+          If you switch to OpenAI embeddings (text-embedding-3-small), this becomes 1536.
+    NOTE: If you change the model, you MUST re-ingest all data — old vectors have
+          different dimensions and are incompatible with the new model.
+
+RERANKER_MODEL=cosine
+    WHAT: How to re-score and re-rank retrieved documents.
+    WHY:  After hybrid retrieval returns top-40 documents (20 dense + 20 sparse),
+          a reranker narrows them down to top-5. "cosine" means we re-score using
+          cosine similarity between query vector and document vectors.
+          Alternative would be a cross-encoder neural reranker (heavier, more accurate).
+
+HUGGINGFACE_TOKEN=
+    WHAT: API token for HuggingFace Hub.
+    WHY:  Some HuggingFace models require authentication to download.
+          fastembed usually downloads models without a token, so this is optional.
+          Only needed if you hit "401 Unauthorized" when loading the embedding model.
+
+
+==============================================================
+VECTOR STORE
+==============================================================
+
+CHROMA_PERSIST_DIR=./storage/chroma
+    WHAT: Folder path where ChromaDB saves its data on disk.
+    WHY:  Without persistence, every time the server restarts all ingested vectors
+          are lost and you'd have to re-ingest. By saving to disk, vectors survive
+          restarts. On Render, this maps to the persistent disk at
+          /opt/render/project/src/storage/chroma.
+
+CHROMA_COLLECTION=supply_chain_incidents
+    WHAT: The "table name" inside ChromaDB for our documents.
+    WHY:  ChromaDB organizes vectors into named collections, like tables in a database.
+          All our ingested supply chain incident documents are stored under this name.
+          The retrieval code queries this collection by name.
+
+
+==============================================================
+HYBRID RETRIEVAL
+==============================================================
+
+DENSE_TOP_K=20
+    WHAT: How many documents to retrieve from ChromaDB (vector/semantic search).
+    WHY:  We ask ChromaDB for the top 20 most semantically similar documents.
+          These are the "meaning-based" matches — finds documents conceptually
+          related to the query even if they don't share exact words.
+
+SPARSE_TOP_K=20
+    WHAT: How many documents to retrieve from BM25 (keyword search).
+    WHY:  BM25 finds documents containing the exact keywords from the query.
+          Good for specific terms like "LATAM fraud" or "First Class".
+          We take top 20 from this too, then merge with the dense results.
+
+RRF_K=60
+    WHAT: The constant "k" in the Reciprocal Rank Fusion formula.
+    WHY:  RRF merges the two ranked lists (dense top-20 + sparse top-20) into one.
+          Formula: score = 1/(k + rank). k=60 is a standard default that prevents
+          very-top-ranked documents from dominating while still rewarding high rank.
+          Result: one merged ranked list of up to 40 unique documents.
+
+RERANK_TOP_K=5
+    WHAT: How many documents to keep after reranking.
+    WHY:  From the merged ~40 documents, the reranker picks the best 5 to actually
+          send to the LLM as context. Sending 40 documents would blow past the
+          LLM's token limit and add noise. Top-5 keeps context tight and relevant.
+
+CRAG_RELEVANCE_THRESHOLD=0.6
+    WHAT: Minimum relevance score required to accept retrieval results.
+    WHY:  After reranking, if the best document's score is still below 0.6,
+          it means retrieval failed — the documents aren't relevant enough.
+          CRAG (Corrective RAG) then kicks in: the LLM reformulates the query
+          and retrieval runs again with the new phrasing. 0.6 was chosen as a
+          threshold where results are clearly not useful enough to trust.
+
+
+==============================================================
+SEMANTIC CACHE
+==============================================================
+
+SEMANTIC_CACHE_THRESHOLD=0.92
+    WHAT: How similar a new query must be to a cached query to reuse the cached answer.
+    WHY:  If someone asks "what is the late delivery rate?" and later asks
+          "what's the late delivery percentage?" — these mean the same thing.
+          At 0.92 cosine similarity they'd be considered the same and the cached
+          answer returned instantly (< 100ms vs ~4s for full pipeline).
+          0.92 is high enough to avoid false matches but catches genuine duplicates.
+
+SEMANTIC_CACHE_MAX_ITEMS=500
+    WHAT: Maximum number of query-answer pairs to keep in the semantic cache.
+    WHY:  Memory limit. Each cache entry stores an embedding vector + the answer text.
+          500 entries is enough to cache a full day of diverse queries without
+          consuming too much RAM. Oldest entries are evicted first (LRU policy).
+
+KEYWORD_CACHE_MAX_ITEMS=1000
+    WHAT: Maximum entries in the fast keyword/exact-match cache layer.
+    WHY:  Before even doing semantic similarity, we check for exact keyword matches.
+          This layer is cheaper to check (no vector math). 1000 items covers
+          more entries since keyword matching is lighter than embedding comparison.
+
+
+==============================================================
+LANGSMITH TRACING
+==============================================================
+
+LANGCHAIN_TRACING_V2=true
+    WHAT: Enables LangSmith tracing for all LangChain/LangGraph calls.
+    WHY:  When true, every agent call, LLM prompt, tool use, and retrieval step
+          is automatically logged to LangSmith. Invaluable for debugging —
+          you can see exactly what prompt was sent, what the LLM responded,
+          how long each step took, and the full execution graph.
+
+LANGCHAIN_ENDPOINT=
+    WHAT: The URL of the LangSmith API.
+    WHY:  Default is https://api.smith.langchain.com. You'd only change this
+          if self-hosting LangSmith. Currently blank — tracing won't actually
+          send data anywhere without this set.
+
+LANGCHAIN_API_KEY=
+    WHAT: Your LangSmith account API key.
+    WHY:  Required to authenticate with LangSmith and associate traces with your
+          project. Get it free at smith.langchain.com. Without this, tracing
+          is enabled in code but silently fails to connect.
+
+LANGCHAIN_PROJECT=
+    WHAT: The project name under which traces are grouped in LangSmith.
+    WHY:  Organizes traces. All runs from this app appear under this project name
+          in the LangSmith dashboard. Recommended value: supply-chain-risk-assistant.
+
+
+==============================================================
+KAGGLE MCP
+==============================================================
+
+KAGGLE_USERNAME=
+    WHAT: Your Kaggle account username.
+    WHY:  The Admin page has a Kaggle dataset browser that lets you download
+          datasets directly from Kaggle into the app. This username is part
+          of the Kaggle API credentials needed to authenticate downloads.
+
+KAGGLE_KEY=
+    WHAT: Your Kaggle API key (generated in your Kaggle account settings).
+    WHY:  Paired with KAGGLE_USERNAME to authenticate Kaggle API requests.
+          Without both, the Kaggle browser feature shows "not connected".
+          Get it: kaggle.com → Account → API → Create New Token.
+
+KAGGLE_MCP_URL=https://www.kaggle.com/mcp
+    WHAT: The MCP (Model Context Protocol) endpoint Kaggle exposes.
+    WHY:  Our backend connects to Kaggle as an MCP server to list and download
+          datasets programmatically. This is the base URL for that connection.
+
+DATACO_DATASET=shashwatwork/dataco-smart-supply-chain-for-big-data-analysis
+    WHAT: The Kaggle dataset slug for the DataCo supply chain dataset.
+    WHY:  Hardcoded so the Admin UI can pre-populate the DataCo dataset path.
+          Format is username/dataset-name as it appears in the Kaggle URL.
+
+FASHION_DATASET=harshsingh2209/supply-chain-analysis
+    WHAT: The Kaggle dataset slug for the fashion supply chain dataset.
+    WHY:  Same purpose as above but for the fashion CSV.
+
+
+==============================================================
+INGESTION
+==============================================================
+
+DATACO_SAMPLE_ROWS=2500
+    WHAT: How many rows to read from the DataCo CSV during ingestion.
+    WHY:  The full DataCo CSV has 180,519 rows. Embedding all of them would take
+          hours and ~1.5GB of vector storage. We sample 2,500 rows for development
+          — enough to give the system real data while keeping ingestion fast (<5 min).
+          Increase this for production if you want better coverage.
+
+INCIDENT_DOC_BATCH_SIZE=128
+    WHAT: How many documents to embed and insert into ChromaDB in one batch.
+    WHY:  Embedding is done in batches for efficiency. Batch size 128 is a common
+          default — large enough to be fast, small enough to avoid memory issues.
+          fastembed processes 128 documents at once through the ONNX model.
+
+LOCAL_DATACO_CSV=./data/source_dataset/DataCo SMART SUPPLY CHAIN.../DataCoSupplyChainDataset.csv
+    WHAT: File path to the DataCo CSV on your local machine.
+    WHY:  When you click "Ingest from Local Files" in the Admin page, the backend
+          reads from this path. The path is relative to where uvicorn is started
+          (the repo root).
+
+LOCAL_FASHION_CSV=./data/source_dataset/supply_chain_data.csv
+    WHAT: File path to the fashion supply chain CSV.
+    WHY:  Same purpose — tells the ingestion pipeline where to find the fashion data.
+
+
+==============================================================
+PERSISTENCE
+==============================================================
+
+SQLITE_PATH=./storage/sqlite/app.db
+    WHAT: File path for the main SQLite database.
+    WHY:  Stores user feedback (thumbs up/down on responses) and any other app-level
+          persistent data. SQLite is a single-file database — no server needed.
+
+LANGGRAPH_CHECKPOINT_DB=./storage/sqlite/checkpoints.db
+    WHAT: File path for the LangGraph conversation state database.
+    WHY:  LangGraph uses this SQLite file to checkpoint the state of each pipeline run.
+          This enables multi-turn conversation memory — the agent can remember what
+          was discussed earlier in a session. Also enables HILT (Human-in-the-Loop)
+          to pause and resume execution across HTTP requests.
+
+
+==============================================================
+GUARDRAILS
+==============================================================
+
+MAX_CONTEXT_TOKENS=6000
+    WHAT: Maximum number of tokens allowed in the context sent to the LLM.
+    WHY:  GPT-4o-mini has a context window limit. If retrieved documents are too long,
+          they'd exceed the limit and cause an API error. We cap at 6000 tokens and
+          use LLM compression (LLMLingua) to trim if needed.
+
+LLMLINGUA_COMPRESSION_RATIO=0.5
+    WHAT: How aggressively to compress context when it exceeds the token limit.
+    WHY:  0.5 means compress to 50% of original length. LLMLingua removes less
+          important sentences/tokens while preserving key facts. Lower = more
+          aggressive compression. 0.5 is a balance between brevity and information loss.
+
+INJECTION_DETECTION_ENABLED=true
+    WHAT: Whether to scan user input for prompt injection attacks.
+    WHY:  Prompt injection is when a user tries to manipulate the LLM by embedding
+          instructions in their query (e.g., "Ignore previous instructions and...").
+          When true, the input guardrail detects and blocks such attempts.
+
+PRIVACY_FILTER_ENABLED=true
+    WHAT: Whether to detect and redact PII (Personally Identifiable Information).
+    WHY:  If retrieved documents or LLM output contains names, emails, phone numbers,
+          etc., the output guardrail replaces them with [REDACTED]. Keeps the system
+          compliant and safe. Also tracked in the Run Quality score (pii_redacted flag).
+
+
+==============================================================
+HILT (Human-in-the-Loop Trigger)
+==============================================================
+
+HIGH_SEVERITY_INTERRUPT=false
+    WHAT: Whether HIGH severity queries pause for human approval before responding.
+    WHY:  When true, if the Orchestrator classifies a query as HIGH severity (fraud,
+          critical corporate delay), the LangGraph pipeline pauses before the
+          Recommendation node and waits for a human to approve. This prevents
+          the system from autonomously taking action on critical alerts.
+    NOTE: Set to false locally for easy testing — you don't want the app to pause
+          every time you test a fraud query. Set to true in production/demo.
+
+
+==============================================================
+API SERVER
+==============================================================
+
+API_HOST=0.0.0.0
+    WHAT: The network interface the FastAPI server binds to.
+    WHY:  0.0.0.0 means "listen on all network interfaces" — accessible from
+          localhost AND your local network. If set to 127.0.0.1, only your own
+          machine can reach it (no network access from other devices).
+
+API_PORT=8000
+    WHAT: The port the FastAPI backend listens on.
+    WHY:  Standard local dev port for Python APIs. Your frontend (port 5173)
+          calls http://localhost:8000 to reach the backend. Change if port 8000
+          is already in use on your machine.
+
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+    WHAT: List of frontend URLs allowed to call the backend API.
+    WHY:  Browsers block cross-origin requests by default (CORS policy). By listing
+          the frontend origin here, the backend tells browsers "these frontends
+          are allowed to call me". Without this, the browser would block all
+          API calls from the React app with a CORS error.
+          On Render, you add the live frontend URL here too.
+
+
+==============================================================
+FRONTEND
+==============================================================
+
+VITE_API_BASE_URL=http://localhost:8000
+    WHAT: The base URL the React frontend uses for all HTTP API calls.
+    WHY:  The frontend's api/client.js reads this at build time (Vite injects it).
+          Locally it points to your local backend. On Render, you set this to
+          https://scria-backend.onrender.com so the deployed frontend talks to
+          the deployed backend.
+    NOTE: Must start with VITE_ for Vite to expose it to the browser bundle.
+          Variables without VITE_ prefix are invisible to the frontend.
+
+VITE_WS_BASE_URL=ws://localhost:8000
+    WHAT: The WebSocket base URL for real-time pipeline event streaming.
+    WHY:  The Flow page connects via WebSocket to receive live pipeline events
+          (node_start, retrieval, crag_retry, faithfulness, final) as the agent
+          graph runs. Uses ws:// locally. On Render (HTTPS), must be wss://
+          (secure WebSocket) — otherwise the browser blocks the connection.
+
+
+==============================================================
+LOGGING
+==============================================================
+
+LOG_LEVEL=INFO
+    WHAT: Controls how verbose the backend logs are.
+    WHY:  INFO logs important events (startup, requests, errors).
+          DEBUG would log everything including every retrieval call and LLM prompt —
+          useful when debugging but very noisy in normal use.
+          WARNING/ERROR would only show problems.
+          INFO is the right balance for development and demo.

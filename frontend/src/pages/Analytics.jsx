@@ -60,19 +60,24 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
+// ── Module-level cache — survives page navigation ───────────────────────────
+const _cache = {}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
-function useFetch(fetchFn, version) {
-  const [data, setData]       = useState(null)
+function useFetch(key, fetchFn, version) {
+  const [data, setData]       = useState(() => _cache[key] ?? null)
   const [err, setErr]         = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !_cache[key])
   const fnRef = useRef(fetchFn)
   fnRef.current = fetchFn
   useEffect(() => {
+    // version=0 on first mount: use cache if available, skip fetch
+    if (version === 0 && _cache[key] != null) return
     let alive = true
     setLoading(true)
     setErr(null)
     fnRef.current()
-      .then(d  => { if (alive) { setData(d); setLoading(false) } })
+      .then(d  => { if (alive) { _cache[key] = d; setData(d); setLoading(false) } })
       .catch(e => { if (alive) { setErr(e.message); setLoading(false) } })
     return () => { alive = false }
   }, [version])
@@ -92,12 +97,12 @@ export default function Analytics() {
   // auto-load on mount
   useEffect(() => { setLastUpdated(new Date().toLocaleTimeString()) }, [])
 
-  const summary   = useFetch(() => api.get('/api/analytics/summary'),                    version)
-  const byMarket  = useFetch(() => api.get('/api/analytics/late-delivery-by-market'),    version)
-  const byMode    = useFetch(() => api.get('/api/analytics/shipment-mode-breakdown'),    version)
-  const orderStat = useFetch(() => api.get('/api/analytics/order-status-distribution'), version)
-  const gapRegion = useFetch(() => api.get('/api/analytics/delivery-gap-by-region'),    version)
-  const fraud     = useFetch(() => api.get('/api/analytics/fraud-by-market'),           version)
+  const summary   = useFetch('summary',    () => api.get('/api/analytics/summary'),                    version)
+  const byMarket  = useFetch('byMarket',   () => api.get('/api/analytics/late-delivery-by-market'),    version)
+  const byMode    = useFetch('byMode',     () => api.get('/api/analytics/shipment-mode-breakdown'),    version)
+  const orderStat = useFetch('orderStat',  () => api.get('/api/analytics/order-status-distribution'), version)
+  const gapRegion = useFetch('gapRegion',  () => api.get('/api/analytics/delivery-gap-by-region'),    version)
+  const fraud     = useFetch('fraud',      () => api.get('/api/analytics/fraud-by-market'),           version)
 
   const anyLoading = [summary, byMarket, byMode, orderStat, gapRegion, fraud].some(r => r.loading)
   const kpi = summary.data || {}

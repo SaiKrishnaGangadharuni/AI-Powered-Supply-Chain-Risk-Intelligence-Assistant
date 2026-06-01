@@ -315,31 +315,67 @@ export default function Admin() {
           <button onClick={() => setShowMcpFlow(true)}
             className="ml-auto text-xs text-[#0e8a77] hover:underline">View Flow</button>
         </div>
+
+        {/* Quick download buttons — always visible */}
+        <div className="mb-4">
+          <p className="text-xs text-gray-500 mb-2">Quick Download (known datasets)</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setSlug(DATACO_SLUG); download('DataCoSupplyChainDataset.csv') }}
+              disabled={downloading || mcpAvailable === false}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#f0faf8] hover:bg-[#d4f0eb] text-[#0a5e53] text-xs font-medium rounded-xl border border-[#b2e0d8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+              DataCo CSV
+            </button>
+            <button
+              onClick={() => { setSlug(FASHION_SLUG); download('supply_chain_data.csv') }}
+              disabled={downloading || mcpAvailable === false}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#f0faf8] hover:bg-[#d4f0eb] text-[#0a5e53] text-xs font-medium rounded-xl border border-[#b2e0d8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+              Fashion CSV
+            </button>
+          </div>
+          {mcpAvailable === false && (
+            <p className="mt-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠ Kaggle MCP unavailable — add KAGGLE_USERNAME and KAGGLE_KEY to .env to enable downloads.
+              Your local CSVs in data/source_dataset/ are still available for ingestion below.
+            </p>
+          )}
+        </div>
+
+        {/* Browse custom slug */}
+        <p className="text-xs text-gray-500 mb-2">Or browse a custom Kaggle dataset</p>
         <div className="flex gap-2 mb-3">
           <input value={slug} onChange={(e) => setSlug(e.target.value)}
+            placeholder="username/dataset-slug"
             className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#0e8a77]" />
-          <button onClick={browse} disabled={browsing}
+          <button onClick={browse} disabled={browsing || mcpAvailable === false}
             className="px-3 py-1.5 bg-[#f0faf8] text-[#0a5e53] text-xs rounded-lg hover:bg-[#d4f0eb] disabled:opacity-50 flex items-center gap-1">
             {browsing ? <Loader2 size={12} className="animate-spin" /> : null} Browse
           </button>
           <button onClick={() => setSlug(DATACO_SLUG)} className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg">DataCo</button>
           <button onClick={() => setSlug(FASHION_SLUG)} className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg">Fashion</button>
         </div>
+
         {files.length > 0 && (
           <div className="bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1">
             {files.map((f) => (
               <div key={f.path || f.name} className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 truncate max-w-xs">{f.path || f.name}</span>
                 <button onClick={() => download(f.path || f.name)} disabled={downloading}
-                  className="ml-2 text-[#0C7063] hover:text-[#083f37] flex items-center gap-1 flex-shrink-0">
+                  className="ml-2 px-2 py-0.5 bg-[#0C7063] hover:bg-[#083f37] text-white rounded flex items-center gap-1 flex-shrink-0">
                   <Download size={11} /> Download
                 </button>
               </div>
             ))}
           </div>
         )}
+
         {downloadResult && (
-          <p className="mt-2 text-xs text-green-600">✓ Saved to {downloadResult.saved_path || 'data/source_dataset'}</p>
+          <p className="mt-2 text-xs text-green-600 font-medium">✓ Saved to {downloadResult.saved_path || 'data/source_dataset'}</p>
+        )}
+        {error && !files.length && (
+          <p className="mt-2 text-xs text-red-500">{error}</p>
         )}
       </div>
 

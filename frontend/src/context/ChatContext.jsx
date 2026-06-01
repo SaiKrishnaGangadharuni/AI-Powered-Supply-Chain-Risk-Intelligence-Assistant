@@ -145,7 +145,8 @@ export function ChatProvider({ children }) {
               if (next[i].role === 'assistant' && next[i].streaming) {
                 next[i] = { ...next[i], id: uid(), streaming: false,
                   content: data.answer || '', severity: data.severity || 'LOW',
-                  docs: data.docs || [], needs_human: !!data.needs_human, cached: true }
+                  docs: data.docs || [], needs_human: !!data.needs_human, cached: true,
+                  timestamp: new Date().toTimeString().slice(0, 8) }
                 break
               }
             }
@@ -172,7 +173,8 @@ export function ChatProvider({ children }) {
               if (next[i].role === 'assistant' && next[i].streaming) {
                 next[i] = { ...next[i], id: uid(), streaming: false,
                   content: data.answer || '', severity: data.severity || 'LOW',
-                  docs: data.docs || [], needs_human: !!data.needs_human, cached: false }
+                  docs: data.docs || [], needs_human: !!data.needs_human, cached: false,
+                  timestamp: new Date().toTimeString().slice(0, 8) }
                 break
               }
             }
@@ -213,9 +215,11 @@ export function ChatProvider({ children }) {
     const q = input.trim()
     if (!q || sending) return
     setLiveStatus('Sending…')
+    const now = new Date()
+    const ts = now.toTimeString().slice(0, 8) // HH:MM:SS
     setMessages((m) => [
       ...m,
-      { id: uid(), role: 'user', content: q },
+      { id: uid(), role: 'user', content: q, timestamp: ts },
       { id: uid(), role: 'assistant', content: '', streaming: true },
     ])
     setSending(true)

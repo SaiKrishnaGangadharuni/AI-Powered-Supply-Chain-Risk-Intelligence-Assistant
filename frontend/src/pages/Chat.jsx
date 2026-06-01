@@ -185,9 +185,15 @@ function Message({ msg, onFeedback }) {
             ? <span className="flex items-center gap-2 text-gray-400"><Loader2 size={14} className="animate-spin" />{msg.content || 'Processing…'}</span>
             : isUser ? msg.content : <MarkdownContent text={msg.content} />}
           {msg.cached && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">cached ⚡</span>}
+          {isUser && msg.timestamp && (
+            <div className="mt-1 text-right text-[11px] text-white/60 tabular-nums">{msg.timestamp}</div>
+          )}
         </div>
         {!isUser && !msg.streaming && (
           <div className="flex items-center gap-2 mt-1 px-1">
+            {msg.timestamp && (
+              <span className="text-[11px] text-gray-400 tabular-nums">{msg.timestamp}</span>
+            )}
             {msg.severity && msg.severity !== 'LOW' && (
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${msg.severity === 'HIGH' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                 {msg.severity}

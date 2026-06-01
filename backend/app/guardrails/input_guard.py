@@ -30,6 +30,19 @@ _GREETING_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ── Follow-up / continuation fast-pass (skip domain check) ───────────────
+# These phrases are clearly continuations of a prior exchange — no domain check needed.
+_FOLLOWUP_RE = re.compile(
+    r"^(explain|elaborate|clarify|continue|go on|tell me more|say more|"
+    r"more details?|more info|give me more|expand on|can you (explain|elaborate|clarify|"
+    r"tell me more|give more|be more specific|provide more)|what do you mean|"
+    r"how so|why( is that)?|what about (that|this|it)|and\??|so\??|"
+    r"in (more )?detail|with (more )?detail|please (explain|elaborate|clarify)|"
+    r"what does (that|this) mean|can you be more specific|"
+    r"what are the (details|specifics)|break (it|that|this) down)[\s!?.]*$",
+    re.IGNORECASE,
+)
+
 # ── Supply-chain keyword fast-pass (skip LLM domain check) ────────────────
 # Fast-pass: ONLY unambiguously supply-chain-specific terms.
 # Generic words (data, transport, our, show, country, cost, list, etc.) are intentionally
@@ -95,6 +108,8 @@ def validate_domain(text: str) -> GuardResult:
     """LLM-based on-topic check. Call ONLY after confirming cache miss."""
     if _DOMAIN_KEYWORDS_RE.search(text):
         return GuardResult(True)   # keyword fast-pass, no LLM needed
+    if _FOLLOWUP_RE.match(text.strip()):
+        return GuardResult(True)   # follow-up fast-pass, no domain check needed
     try:
         msgs = [SystemMessage(content=_DOMAIN_SYSTEM), HumanMessage(content=text)]
         resp = router.invoke(TaskType.ROUTING, msgs)
@@ -105,8 +120,8 @@ def validate_domain(text: str) -> GuardResult:
         event_bus.emit("guardrail", stage="domain", ok=False, reason=r.reason)
         return r
     except Exception as e:
-        logger.warning(f"Domain check failed (LLM error): {e!r}")
-        return GuardResult(False, "Classification service unavailable — please try again.", "LOW")
+        logger.warning(f"Domain check failed (LLM error) — failing open: {e!r}")
+        return GuardResult(True)  # fail open: let the pipeline handle it rather than blocking
 
 
 # ── Combined (kept for backward compat / REST endpoint) ───────────────────

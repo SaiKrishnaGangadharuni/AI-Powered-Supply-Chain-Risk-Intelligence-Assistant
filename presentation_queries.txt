@@ -1,0 +1,38 @@
+SUPPLY CHAIN RISK INTELLIGENCE ASSISTANT — DEMO QUERIES
+==========================================================
+
+SHIPMENT RISK
+--------------
+1. Which shipping mode has the highest late delivery rate in the DataCo dataset?
+2. What percentage of orders are delivered late across all shipping modes?
+3. What actions should I take for a First Class shipment that is at risk of being late?
+4. Compare on-time delivery performance across all four shipping modes.
+
+SUPPLIER RISK
+--------------
+5. Which markets have the highest suspected fraud order concentration?
+6. Compare LATAM and Europe in terms of supply chain fraud risk.
+7. Which supplier should I prioritize for critical replenishment orders?
+8. What is the defect rate comparison across haircare, skincare, and cosmetics products?
+
+INVENTORY INTELLIGENCE
+-----------------------
+9. What are the current stock level risks in the fashion supply chain?
+10. Which transport mode should I use for emergency inventory replenishment and why?
+11. What is the lead time difference between the fastest and slowest suppliers?
+12. When should I trigger a reorder based on current stock level data?
+
+CROSS-DOMAIN / COMPLEX
+------------------------
+13. Give me an overall supply chain health summary across both datasets.
+14. What KPIs should I monitor to prevent stockouts and late deliveries simultaneously?
+15. What mitigation strategies reduce supplier delivery risk in the fashion supply chain?
+
+HIGH SEVERITY — TRIGGERS HUMAN-IN-THE-LOOP
+--------------------------------------------
+16. I have a suspected fraud order from LATAM worth $50,000 — what should I do?
+17. A Corporate customer's First Class shipment is critically delayed — what is the recommended action?
+
+SEMANTIC CACHE TEST
+--------------------
+18. (Ask question #1 again) — response should return instantly from cache.

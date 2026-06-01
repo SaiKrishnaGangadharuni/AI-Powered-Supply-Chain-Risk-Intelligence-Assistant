@@ -17,8 +17,14 @@ export default function Message({ msg, onShowDocs, onFeedback, onEscalate }) {
           </div>
         )}
         <div>{msg.content || (msg.streaming ? '…' : '')}</div>
+        {isUser && msg.timestamp && (
+          <div className="mt-1 text-right text-[11px] text-white/60 tabular-nums">{msg.timestamp}</div>
+        )}
         {!isUser && !msg.streaming && (
           <div className="mt-3 pt-2 border-t border-ink-300/40 flex items-center gap-3 text-xs text-ink-500">
+            {msg.timestamp && (
+              <span className="text-[11px] text-ink-400 tabular-nums">{msg.timestamp}</span>
+            )}
             <button
               onClick={() => onShowDocs?.(msg)}
               className="inline-flex items-center gap-1 hover:text-ink-900"

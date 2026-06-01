@@ -19,21 +19,26 @@ _DATACO_PATH = (
 _FASHION_PATH = _REPO_ROOT / "data" / "source_dataset" / "supply_chain_data.csv"
 
 
-def _resolve_csv() -> str:
+def _resolve_csv() -> str | None:
     if _DATACO_PATH.exists():
         return str(_DATACO_PATH)
     if _FASHION_PATH.exists():
         return str(_FASHION_PATH)
-    raise FileNotFoundError("No dataset CSV found.")
+    return None  # caller handles missing gracefully
 
 
 def _load_df(sample_n: int = 10000):
     import pandas as pd
     path = _resolve_csv()
+    if path is None:
+        return None  # no CSV available — callers return empty response
     df = pd.read_csv(path, encoding="latin-1", low_memory=False)
     if len(df) > sample_n:
         df = df.sample(n=sample_n, random_state=42)
     return df
+
+
+_EMPTY = {"data": [], "message": "Dataset CSV not found. Please ingest data first."}
 
 
 @router.get("/summary")
@@ -41,6 +46,10 @@ async def analytics_summary() -> Dict[str, Any]:
     """Top-level KPIs for the dashboard header cards."""
     try:
         df = _load_df(10000)
+        if df is None:
+            return {"total_orders": 0, "late_delivery_rate_pct": 0, "fraud_rate_pct": 0,
+                    "cancellation_rate_pct": 0, "avg_profit_per_order": 0,
+                    "message": "Dataset CSV not found. Please ingest data first."}
 
         total_orders = len(df)
 
@@ -82,6 +91,7 @@ async def late_delivery_by_market() -> Dict[str, Any]:
     """Late delivery rate (%) broken down by Market."""
     try:
         df = _load_df(15000)
+        if df is None: return _EMPTY
         if "Market" not in df.columns or "Late_delivery_risk" not in df.columns:
             return {"data": []}
 
@@ -103,6 +113,7 @@ async def shipment_mode_breakdown() -> Dict[str, Any]:
     """Order count and late rate by Shipping Mode."""
     try:
         df = _load_df(15000)
+        if df is None: return _EMPTY
         if "Shipping Mode" not in df.columns:
             return {"data": []}
 
@@ -123,6 +134,7 @@ async def order_status_distribution() -> Dict[str, Any]:
     """Count of orders by Order Status."""
     try:
         df = _load_df(15000)
+        if df is None: return _EMPTY
         if "Order Status" not in df.columns:
             return {"data": []}
 
@@ -138,6 +150,7 @@ async def delivery_gap_by_region() -> Dict[str, Any]:
     """Average (real - scheduled) shipping day gap by Order Region."""
     try:
         df = _load_df(15000)
+        if df is None: return _EMPTY
         real_col = "Days for shipping (real)"
         sched_col = "Days for shipment (scheduled)"
         region_col = "Order Region"
@@ -164,6 +177,7 @@ async def fraud_by_market() -> Dict[str, Any]:
     """Fraud order count and rate by Market."""
     try:
         df = _load_df(15000)
+        if df is None: return _EMPTY
         if "Market" not in df.columns or "Order Status" not in df.columns:
             return {"data": []}
 

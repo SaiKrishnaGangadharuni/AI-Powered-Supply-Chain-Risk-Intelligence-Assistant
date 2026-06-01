@@ -57,11 +57,21 @@ class LLMRouter:
 
         if provider == LLMProvider.OPENAI_MINI:
             from langchain_openai import ChatOpenAI
+            import httpx
+
+            # Normalise base_url: ensure it ends with /v1 as required by the gateway
+            base_url = settings.openai_base_url or None
+            if base_url and not base_url.rstrip("/").endswith("/v1"):
+                base_url = base_url.rstrip("/") + "/v1"
+
+            # Disable SSL verification for self-signed gateway certs
+            http_client = httpx.Client(verify=False) if base_url else None
 
             client = ChatOpenAI(
                 model=settings.openai_model,
                 api_key=settings.openai_api_key or None,
-                base_url=settings.openai_base_url or None,
+                base_url=base_url,
+                http_client=http_client,
                 temperature=0.2,
                 timeout=8,      # fail fast → Groq fallback kicks in quickly
                 max_retries=0,  # we handle retry/fallback ourselves

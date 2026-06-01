@@ -1,0 +1,171 @@
+AI-POWERED SUPPLY CHAIN RISK INTELLIGENCE ASSISTANT — REPO GUIDE
+==================================================================
+
+ROOT FILES
+----------
+README.md               → Full project documentation (setup, architecture, API, Render deploy)
+requirements.txt        → All Python backend dependencies (FastAPI, LangChain, ChromaDB, etc.)
+runtime.txt             → Tells Render to use Python 3.11.9
+render.yaml             → Render deployment config for both backend (Web Service) and frontend (Static Site)
+.env                    → Your local secrets (API keys) — NOT committed to GitHub
+.env.example            → Template showing which env vars are needed
+.gitignore              → Files excluded from Git (venv, storage, .env, node_modules, etc.)
+presentation_queries.txt → Demo questions to ask during presentation
+REPO_GUIDE.txt          → This file
+
+
+BACKEND  (backend/)
+====================
+
+backend/app/main.py
+    → FastAPI app entry point. Registers all routers, CORS, health check endpoint (/health).
+
+backend/app/core/
+    config.py       → Reads all environment variables (API keys, model names, thresholds, paths).
+    llm_router.py   → LLM fallback chain: GPT-4o-mini → Groq Large → Groq Small (auto-switches on failure).
+    logging.py      → Structured logging setup used across the app.
+
+backend/app/agents/
+    graph.py                → LangGraph pipeline definition. Wires all agents into a DAG with conditional edges.
+    orchestrator.py         → First agent to run. Classifies query intent (shipment/supplier_risk/inventory)
+                              and severity (LOW/MEDIUM/HIGH). Routes to correct specialist agent.
+    supplier_risk.py        → Specialist agent for fraud, vendor reliability, lead time queries.
+    shipment_analysis.py    → Specialist agent for late delivery, shipping mode, carrier route queries.
+    inventory_intelligence.py → Specialist agent for stockout, stock levels, reorder point queries.
+    recommendation.py       → Final agent. Synthesizes specialist output into actionable recommendation.
+                              Also runs faithfulness check (Groq as LLM judge) and emits SSE events.
+    _common.py              → Shared helpers used across all agents (retrieval call, CRAG logic, etc.).
+
+backend/app/retrieval/
+    vector_store.py     → ChromaDB wrapper. Stores and queries document embeddings (384-dim).
+    embeddings.py       → fastembed (BAAI/bge-small-en-v1.5) — local ONNX, no API key needed.
+    bm25_index.py       → BM25 sparse keyword index built over ingested documents.
+    hybrid_search.py    → Combines ChromaDB (dense top-20) + BM25 (sparse top-20) using RRF fusion.
+    reranker.py         → Cross-encoder reranker (cosine). Narrows fused results to top-5.
+
+backend/app/ingestion/
+    pipeline.py         → Orchestrates the full ingestion flow: load → transform → embed → store.
+    local_loader.py     → Loads CSV files from data/source_dataset/ into memory.
+    transformer.py      → Converts CSV rows into natural-language incident documents for embedding.
+    file_registry.py    → Tracks which files have already been ingested (prevents re-ingestion).
+    kaggle_mcp.py       → MCP server integration to browse and download Kaggle datasets via UI.
+
+backend/app/cache/
+    semantic_cache.py   → In-memory semantic cache. Returns cached response if query cosine similarity
+                          ≥ 0.92 to a previous query. Max 500 entries, LRU eviction.
+    keyword_cache.py    → Fast exact/keyword-match cache layer checked before semantic cache.
+
+backend/app/guardrails/
+    input_guard.py      → Validates and sanitizes user input before it enters the pipeline.
+    output_guard.py     → Post-processes LLM output: PII redaction, faithfulness check, safety filter.
+    llm_compress.py     → Compresses long retrieved context to fit within LLM token limits.
+
+backend/app/services/
+    event_bus.py        → SSE/WebSocket event emitter. Streams pipeline events to frontend in real-time
+                          (node_start, retrieval, crag_retry, faithfulness, final, etc.).
+    feedback_store.py   → SQLite store for user thumbs-up/down feedback on responses.
+    anomaly.py          → Statistical anomaly detection over supply chain metrics.
+
+backend/app/api/routes/
+    chat.py             → POST /api/chat/query (main chat), WebSocket /api/chat/ws, POST /api/chat/feedback.
+    ingestion.py        → POST /api/ingestion/run, GET /api/ingestion/status, POST /api/ingestion/clear.
+    analytics.py        → GET endpoints for charts: late delivery rates, fraud counts, stock levels, etc.
+    evaluation.py       → GET /api/evaluation/latest — runs DeepEval + RAGAS and returns scores.
+    mcp_browser.py      → GET /api/mcp/list-files, POST /api/mcp/download (Kaggle dataset browser).
+    anomaly.py          → GET /api/anomaly/detect — returns anomaly flags from analytics data.
+
+backend/app/models/
+    schemas.py          → Pydantic request/response models for all API endpoints.
+
+backend/app/evaluation/
+    golden_dataset.json → 50 ground-truth Q&A pairs grounded in real DataCo and fashion CSV values.
+                          Used by DeepEval and RAGAS to score retrieval and answer quality.
+    deepeval_metrics.py → DeepEval evaluation runner (Faithfulness, AnswerRelevancy, Hallucination).
+    ragas_metrics.py    → RAGAS evaluation runner (ContextPrecision, ContextRecall, Faithfulness).
+
+backend/mcp_server/
+    server.py           → Standalone MCP server exposing Kaggle dataset browsing as a tool.
+
+
+FRONTEND  (frontend/)
+======================
+
+frontend/index.html         → HTML entry point for the Vite app.
+frontend/vite.config.js     → Vite build config. Proxies /api to backend in development.
+frontend/tailwind.config.js → Tailwind CSS config.
+frontend/package.json       → Node dependencies (React, Vite, Tailwind, Recharts, ReactFlow).
+frontend/start-frontend.cmd → Windows helper script to run `npm.cmd run dev`.
+
+frontend/src/main.jsx       → React app bootstrap. Mounts App into #root.
+frontend/src/App.jsx        → Router setup. Defines all 5 routes:
+                                /        → Chat page
+                                /flow    → Live pipeline DAG page
+                                /admin   → Data ingestion control panel
+                                /analytics → Charts and metrics dashboard
+                                /present → Slide-based presentation view
+
+frontend/src/api/
+    client.js           → Thin fetch wrapper for all backend API calls. Reads VITE_API_BASE_URL
+                          and VITE_WS_BASE_URL from env for local vs Render switching.
+
+frontend/src/context/
+    ChatContext.jsx     → Global state for chat: messages, timeline events, runMetrics (quality score,
+                          faithfulness, retrieval stats, CRAG retries). Handles WebSocket connection
+                          and all SSE event parsing.
+
+frontend/src/pages/
+    Chat.jsx            → Main chat UI. Message list, input box, severity badges, FlowViz panel.
+    Flow.jsx            → Full-screen LangGraph DAG visualization with live node status/timing.
+                          Right panel shows Run Quality dashboard (0-100 score, faithfulness reason,
+                          retrieval stats, techniques used, elapsed time).
+    Admin.jsx           → Ingestion control panel. Upload/ingest CSVs, view status, clear vectors.
+    Analytics.jsx       → Charts dashboard. Late delivery rates, fraud counts, stock levels,
+                          defect rates, transport costs — all from backend analytics API.
+    Presentation.jsx    → Slide deck view of the project (architecture, pipeline, metrics).
+
+frontend/src/components/
+    Message.jsx         → Renders a single chat message with markdown support.
+    SeverityBadge.jsx   → LOW / MEDIUM / HIGH colored badge component.
+    DocsDrawer.jsx      → Slide-out drawer showing retrieved source documents.
+    flow/FlowViz.jsx    → Animated pipeline DAG (ReactFlow). Shows each agent node with status.
+    flow/NodeCard.jsx   → Individual node card in the DAG (icon, label, status, timing).
+
+frontend/src/hooks/
+    useFlowState.js     → Custom hook managing pipeline node state from WebSocket events.
+
+frontend/src/styles/
+    index.css           → Global styles, Tailwind base imports, dark theme variables.
+
+
+DATA  (data/)
+==============
+
+data/source_dataset/
+    DataCo SMART SUPPLY CHAIN FOR BIG DATA ANALYSIS/
+        DataCoSupplyChainDataset.csv    → Main dataset. 180,519 rows. Fields: Shipping Mode,
+                                          Late_delivery_risk, Order Status, Market, Days for
+                                          shipping (real/scheduled), Order Profit, etc.
+        DescriptionDataCoSupplyChain.csv → Column descriptions for the DataCo dataset.
+        tokenized_access_logs.csv       → Access log data (supplementary).
+    supply_chain_data.csv               → Fashion supply chain dataset. 100 rows. Fields:
+                                          Product Type, Supplier Name, Stock Levels, Lead Time,
+                                          Defect Rates, Transport Mode, Transportation Costs.
+
+
+DOCS  (docs/)
+==============
+
+docs/architecture/
+    design.md           → Architecture design notes and decisions.
+    architecture.svg    → Visual architecture diagram of the full system.
+
+docs/project_instructions/
+    AI-Powered Supply Chain Risk Intelligence Assistant.docx
+                        → Original project requirement document from the training program.
+
+
+STORAGE  (storage/)  — gitignored, created at runtime
+=======================================================
+
+storage/chroma/         → ChromaDB vector store (persisted embeddings after ingestion).
+storage/checkpointer.db → SQLite database for LangGraph conversation state checkpointing.

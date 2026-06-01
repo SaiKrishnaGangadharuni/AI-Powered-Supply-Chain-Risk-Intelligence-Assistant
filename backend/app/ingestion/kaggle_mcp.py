@@ -69,37 +69,59 @@ async def _call_tool_async(name: str, arguments: Dict[str, Any]) -> Any:
 
 
 def call_tool(name: str, arguments: Optional[Dict[str, Any]] = None) -> Any:
-    """Sync wrapper around an MCP tool call."""
+    """Sync wrapper — only use outside an async context (e.g. scripts)."""
     return asyncio.run(_call_tool_async(name, arguments or {}))
 
 
-# ---------------- High-level helpers ----------------
-def ping() -> bool:
+# ---------------- High-level helpers (async — safe to await in FastAPI) ----------------
+async def ping_async() -> bool:
     try:
-        out = call_tool("ping")
+        out = await _call_tool_async("ping")
         return out == "pong" or out == '"pong"'
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[MCP] ping failed: {e!r}")
         return False
 
 
-def list_files(slug: str) -> List[Dict[str, Any]]:
-    payload = call_tool("list_kaggle_files", {"slug": slug})
+async def list_files_async(slug: str) -> List[Dict[str, Any]]:
+    payload = await _call_tool_async("list_kaggle_files", {"slug": slug})
     if isinstance(payload, dict):
         return payload.get("files", [])
     return []
 
 
-def fetch_dataset(slug: str, dest_dir: str) -> Dict[str, Any]:
+async def fetch_dataset_async(slug: str, dest_dir: str) -> Dict[str, Any]:
     """Returns {"slug", "dest_dir", "files": [...]}."""
-    payload = call_tool("fetch_kaggle_dataset", {"slug": slug, "dest_dir": dest_dir})
+    payload = await _call_tool_async("fetch_kaggle_dataset", {"slug": slug, "dest_dir": dest_dir})
     if not isinstance(payload, dict):
         raise RuntimeError(f"Unexpected MCP payload: {payload!r}")
     return payload
+
+
+# Sync versions for non-async callers (pipeline, scripts)
+def ping() -> bool:
+    return asyncio.run(ping_async())
+
+def list_files(slug: str) -> List[Dict[str, Any]]:
+    return asyncio.run(list_files_async(slug))
+
+def fetch_dataset(slug: str, dest_dir: str) -> Dict[str, Any]:
+    return asyncio.run(fetch_dataset_async(slug, dest_dir))
 
 
 def is_available() -> bool:
     """Quick check used by the pipeline to decide MCP vs local fallback."""
     if not settings.kaggle_username or not settings.kaggle_key:
         return False
-    return ping()
+    # Verify credentials are valid by doing a lightweight kaggle API check
+    try:
+        import os
+        os.environ["KAGGLE_USERNAME"] = settings.kaggle_username
+        os.environ["KAGGLE_KEY"] = settings.kaggle_key
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        api = KaggleApi()
+        api.authenticate()
+        return True
+    except Exception as e:
+        logger.warning(f"[MCP] Kaggle credential check failed: {e!r}")
+        return False

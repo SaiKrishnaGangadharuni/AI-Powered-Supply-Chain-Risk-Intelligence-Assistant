@@ -26,7 +26,7 @@ async def health() -> dict:
 @router.get("/list-files")
 async def list_files(slug: str) -> dict:
     try:
-        files = kaggle_mcp.list_files(slug)
+        files = await kaggle_mcp.list_files_async(slug)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"MCP list-files failed: {e!r}")
         raise HTTPException(status_code=502, detail=f"MCP tool failed: {e!r}")
@@ -37,7 +37,7 @@ async def list_files(slug: str) -> dict:
 async def download(req: DownloadRequest) -> dict:
     dest = req.dest_dir or str(settings.resolve(f"./data/kaggle_cache/{req.slug.split('/')[-1]}"))
     try:
-        payload = kaggle_mcp.fetch_dataset(req.slug, dest)
+        payload = await kaggle_mcp.fetch_dataset_async(req.slug, dest)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"MCP fetch_dataset failed: {e!r}")
         raise HTTPException(status_code=502, detail=f"MCP tool failed: {e!r}")
