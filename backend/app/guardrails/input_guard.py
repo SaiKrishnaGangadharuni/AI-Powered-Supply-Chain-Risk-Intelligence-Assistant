@@ -34,12 +34,12 @@ _GREETING_RE = re.compile(
 # These phrases are clearly continuations of a prior exchange — no domain check needed.
 _FOLLOWUP_RE = re.compile(
     r"^(explain|elaborate|clarify|continue|go on|tell me more|say more|"
-    r"more details?|more info|give me more|expand on|can you (explain|elaborate|clarify|"
-    r"tell me more|give more|be more specific|provide more)|what do you mean|"
-    r"how so|why( is that)?|what about (that|this|it)|and\??|so\??|"
-    r"in (more )?detail|with (more )?detail|please (explain|elaborate|clarify)|"
-    r"what does (that|this) mean|can you be more specific|"
-    r"what are the (details|specifics)|break (it|that|this) down)[\s!?.]*$",
+    r"more details?|more info|give me more|expand|expand on|can you\b.*|"
+    r"what do you mean|could you\b.*|please (explain|elaborate|clarify|tell|describe)\b.*|"
+    r"how so|why\b.*|what about (that|this|it)|and\??|so\??|"
+    r"in (more )?detail|with (more )?detail|"
+    r"what does (that|this) mean|be more specific|"
+    r"what are the (details|specifics)|break (it|that|this) down)[\s\w!?.,-]*$",
     re.IGNORECASE,
 )
 

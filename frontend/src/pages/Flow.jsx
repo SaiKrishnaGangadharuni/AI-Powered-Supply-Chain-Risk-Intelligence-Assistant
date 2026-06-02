@@ -216,11 +216,11 @@ export default function Flow() {
         <VArrow done={s('cache')==='done'} active={s('domain_check')==='active'} />
 
         {/* DOMAIN CHECK — only on cache miss */}
-        <Node label="Domain Check" sub="Groq LLM on-topic check — only runs on cache miss" color="orange" status={s('domain_check')} />
+        <Node label="Domain Check" sub="LLM on-topic classification — only runs on cache miss" color="orange" status={s('domain_check')} />
         <VArrow done={s('domain_check')==='done'} active={s('orchestrator')==='active'} />
 
         {/* ORCHESTRATOR */}
-        <Node label="Orchestrator" sub="Intent classification · severity · A2A fan-out (Groq llama-3.1-8b)" color="blue" status={s('orchestrator')} />
+        <Node label="Orchestrator" sub="Intent classification · severity · A2A fan-out" color="blue" status={s('orchestrator')} />
 
         {/* AGENTS FAN-OUT */}
         <AgentFanOut s={s} />
@@ -231,8 +231,8 @@ export default function Flow() {
         <ParallelPair
           done={s('retrieval')==='done'}
           active={s('retrieval')==='active'}
-          left={<Node label="ChromaDB Dense" sub="Embedding vector search (fastembed 384-dim)" color="cyan" status={s('retrieval')} width={175} />}
-          right={<Node label="BM25 Sparse" sub="Keyword index (rank_bm25)" color="cyan" status={s('retrieval')} width={175} />}
+          left={<Node label="Dense Retrieval" sub="Embedding vector search" color="cyan" status={s('retrieval')} width={175} />}
+          right={<Node label="Sparse Retrieval" sub="Keyword index" color="cyan" status={s('retrieval')} width={175} />}
         />
 
         <VArrow done={s('rerank')==='done'} active={s('rerank')==='active'} color="#2dd4bf" />
@@ -242,7 +242,7 @@ export default function Flow() {
         <VArrow done={s('recommendation')==='done'} active={s('recommendation')==='active'} />
 
         {/* RECOMMENDATION */}
-        <Node label="Recommendation Node" sub="Mitigation guidance synthesis (gpt-4o-mini)" color="green" status={s('recommendation')} />
+        <Node label="Recommendation Node" sub="Risk synthesis · mitigation guidance" color="green" status={s('recommendation')} />
         <VArrow done={s('guard_out')==='done'} active={s('guard_out')==='active'} />
 
         {/* OUTPUT GUARDRAILS */}
@@ -250,7 +250,7 @@ export default function Flow() {
         <VArrow done={s('hilt')==='done'} active={s('hilt')==='active'} />
 
         {/* HILT */}
-        <Node label="HILT + Feedback" sub="HIGH severity → human review interrupt · SQLite feedback store" color="amber" status={s('hilt')} />
+        <Node label="HILT + Feedback" sub="HIGH severity → human review interrupt · audit log" color="amber" status={s('hilt')} />
         <VArrow done={s('hilt')==='done'} />
 
         {/* FINAL ANSWER */}

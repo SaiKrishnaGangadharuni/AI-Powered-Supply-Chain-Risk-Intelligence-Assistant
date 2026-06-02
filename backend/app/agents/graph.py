@@ -53,8 +53,9 @@ def _route_specialists(state: AgentState) -> List[str]:
         return ["shipment_analysis"]
     if intent == "inventory_intelligence":
         return ["inventory_intelligence"]
-    # general / unknown → run all three
-    return ["supplier_risk", "shipment_analysis", "inventory_intelligence"]
+    # general / unknown → default to supplier_risk as broadest agent
+    # Running all three caused 45s response times; single agent keeps latency acceptable
+    return ["supplier_risk"]
 
 
 def build_graph(checkpointer: Optional[Any] = None):

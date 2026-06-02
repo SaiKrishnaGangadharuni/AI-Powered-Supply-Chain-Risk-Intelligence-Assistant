@@ -169,6 +169,20 @@ Each agent runs independently and writes to shared state:
 | **LLM — routing / classify** | Groq llama-3.1-8b-instant |
 | **LLM — summarization** | Groq llama-3.3-70b-versatile |
 | **LLM fallback chain** | openai_mini → groq_large → groq_small |
+
+### LLM Task Routing
+
+The system uses **task-based model selection** — not a single model for everything. Each task type maps to the best-fit model, with automatic fallback if a provider fails.
+
+| Task | Primary Model | Fallback Chain | Reason |
+|---|---|---|---|
+| `ROUTING` — orchestrator, domain check | Groq llama-3.1-8b-instant | → OpenAI → Groq 70B | Fast classification (~200ms), runs on every query |
+| `SUMMARIZATION` — mid-weight synthesis | Groq llama-3.3-70b-versatile | → OpenAI → Groq 8B | Better reasoning than 8B, still free on Groq |
+| `REASONING` — specialist agents | GPT-4o-mini | → Groq 70B → Groq 8B | Complex domain reasoning needs best quality |
+| `JUDGE` — faithfulness check | GPT-4o-mini | → Groq 70B → Groq 8B | LLM-as-judge accuracy critical for quality scoring |
+| `RECOMMENDATION` — final answer | GPT-4o-mini | → Groq 70B → Groq 8B | User-facing output requires highest quality |
+
+**Design rationale:** Groq handles all lightweight/fast tasks (routing, classification) for speed and cost savings. OpenAI handles all quality-critical tasks (reasoning, recommendations, evaluation). If any provider fails, the fallback chain automatically retries the next provider without the user seeing an error.
 | **Embeddings** | BAAI/bge-small-en-v1.5 via fastembed (local, 384-dim) |
 | **Vector DB** | ChromaDB (persistent, cosine space) |
 | **Sparse search** | rank-bm25 |
