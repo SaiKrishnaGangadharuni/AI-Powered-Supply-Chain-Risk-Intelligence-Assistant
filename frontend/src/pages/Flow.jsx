@@ -184,7 +184,7 @@ function MetricRow({ label, value, sub, color }) {
 }
 
 export default function Flow() {
-  const { messages, liveStatus, nodeStatus: ns_ctx, timeline, runMetrics } = useChatContext()
+  const { messages, liveStatus, nodeStatus: ns_ctx, timeline, runMetrics, llmCalls } = useChatContext()
   const [ns, setNs] = useState({})
 
   useEffect(() => { setNs(ns_ctx || {}) }, [ns_ctx])
@@ -324,6 +324,33 @@ export default function Flow() {
         {runMetrics?.elapsed_total && (
           <div style={{ marginBottom:12, paddingTop:10, borderTop:'1px solid #f3f4f6' }}>
             <MetricRow label="Total elapsed" value={`${(runMetrics.elapsed_total/1000).toFixed(2)}s`} color="#0C7063" />
+          </div>
+        )}
+
+        {/* Live LLM calls */}
+        {llmCalls && llmCalls.length > 0 && (
+          <div style={{ marginBottom:12, paddingTop:10, borderTop:'1px solid #f3f4f6' }}>
+            <div style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>
+              🤖 Models Used
+            </div>
+            {llmCalls.map((c, i) => {
+              const providerLabel = { openai_mini:'GPT-4o-mini', groq_large:'Groq 70B', groq_small:'Groq 8B' }[c.provider] || c.provider
+              const taskLabel = { routing:'Routing', recommendation:'Recommendation', judge:'Faithfulness', reasoning:'Reasoning', summarization:'Summary' }[c.task] || c.task
+              const statusColor = c.status === 'done' ? '#15803d' : c.status === 'fallback' ? '#b45309' : '#2563eb'
+              const statusIcon  = c.status === 'done' ? '✓' : c.status === 'fallback' ? '⚠ fallback' : '⟳'
+              return (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5, padding:'3px 6px', background: c.status==='fallback'?'#fff7ed':c.status==='calling'?'#eff6ff':'#f0fdf4', borderRadius:5, border:`1px solid ${c.status==='fallback'?'#fed7aa':c.status==='calling'?'#bfdbfe':'#bbf7d0'}` }}>
+                  <div>
+                    <span style={{ fontSize:10, fontWeight:600, color:'#1f2937' }}>{providerLabel}</span>
+                    <span style={{ fontSize:9, color:'#6b7280', marginLeft:5 }}>{taskLabel}</span>
+                  </div>
+                  <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                    {c.ms && <span style={{ fontSize:9, color:'#6b7280' }}>{c.ms}ms</span>}
+                    <span style={{ fontSize:9, fontWeight:600, color:statusColor }}>{statusIcon}</span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 

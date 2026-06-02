@@ -132,15 +132,24 @@ class LLMRouter:
         **kwargs: Any,
     ) -> Any:
         """Run a chat completion with automatic provider fallback."""
+        import time
+        from app.services.event_bus import event_bus
+
         last_err: Optional[Exception] = None
         for provider in self.get_chain_for_task(task):
             try:
                 client = self._get_client(provider)
                 logger.debug(f"LLM invoke via {provider} for task={task}")
-                return self._invoke_once(client, messages, **kwargs)
+                event_bus.emit("llm_call", provider=provider.value, task=task.value, status="calling")
+                t0 = time.time()
+                result = self._invoke_once(client, messages, **kwargs)
+                ms = round((time.time() - t0) * 1000)
+                event_bus.emit("llm_call", provider=provider.value, task=task.value, status="done", ms=ms)
+                return result
             except Exception as e:  # noqa: BLE001
                 last_err = e
                 logger.warning(f"LLM provider {provider} failed: {e!r}")
+                event_bus.emit("llm_call", provider=provider.value, task=task.value, status="fallback")
                 if on_fallback:
                     on_fallback(provider, e)
                 continue

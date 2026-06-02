@@ -23,6 +23,7 @@ export function ChatProvider({ children }) {
   const [nodeStatus,  setNodeStatus]  = useState({})
   const [timeline,    setTimeline]    = useState([])
   const [runMetrics,  setRunMetrics]  = useState(null)
+  const [llmCalls,    setLlmCalls]    = useState([])
   const runStartRef = useRef(null)
   const wsRef = useRef(null)
 
@@ -32,6 +33,7 @@ export function ChatProvider({ children }) {
     setNodeStatus({})
     setTimeline([])
     setRunMetrics(null)
+    setLlmCalls([])
     runStartRef.current = Date.now()
   }
   const patchMetrics = (patch) => setRunMetrics((p) => ({ ...(p || {}), ...patch }))
@@ -85,6 +87,18 @@ export function ChatProvider({ children }) {
               }
             }
             return next
+          })
+
+        } else if (data.type === 'llm_call') {
+          setLlmCalls((prev) => {
+            // Update existing entry for same provider+task if calling→done/fallback
+            const idx = prev.findLastIndex(c => c.provider === data.provider && c.task === data.task)
+            if (idx >= 0 && data.status !== 'calling') {
+              const next = [...prev]
+              next[idx] = { ...next[idx], status: data.status, ms: data.ms }
+              return next
+            }
+            return [...prev, { provider: data.provider, task: data.task, status: data.status, ms: data.ms, t: Date.now() }]
           })
 
         } else if (data.type === 'retrieval') {
@@ -238,7 +252,7 @@ export function ChatProvider({ children }) {
   }, [sending, sessionId])
 
   return (
-    <ChatContext.Provider value={{ messages, sending, liveStatus, sessionId, nodeStatus, timeline, runMetrics, send }}>
+    <ChatContext.Provider value={{ messages, sending, liveStatus, sessionId, nodeStatus, timeline, runMetrics, llmCalls, send }}>
       {children}
     </ChatContext.Provider>
   )
