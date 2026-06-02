@@ -126,11 +126,11 @@ Design decisions and trade-offs: `docs/architecture/design.md`
 - On hit: returns cached answer immediately, skips full pipeline
 - Also maintains a keyword LRU cache for exact-match queries
 
-### 3. Orchestrator (Groq llama-3.1-8b-instant)
+### 3. Orchestrator
 - Classifies intent: `supplier_risk` | `shipment_analysis` | `inventory_intelligence` | `general`
 - Classifies severity: `HIGH` | `MEDIUM` | `LOW`
-- `general` intent → fans out to all three specialist agents in parallel
-- Specific intent → routes to one agent only
+- Specific intent → routes to one specialist agent only
+- `general` intent → defaults to supplier_risk agent (broadest coverage, avoids multi-agent latency)
 
 ### 4. Specialist Agents (parallel via LangGraph)
 Each agent runs independently and writes to shared state:
@@ -144,7 +144,7 @@ Each agent runs independently and writes to shared state:
 - **Fusion**: Reciprocal Rank Fusion (RRF, k=60) → top 5 after cosine rerank
 - **CRAG**: If best rerank score < 0.6, query is reformulated by LLM and retrieval retried once
 
-### 6. Recommendation Agent (GPT-4o-mini)
+### 6. Recommendation Agent
 - Aggregates all agent outputs and retrieved context
 - Adaptive format: bullet list for factual queries, structured report for risk analysis, natural prose for conversational
 - Always cites `[Doc N]` sources
@@ -307,6 +307,11 @@ AI-Powered-Supply-Chain-Risk-Intelligence-Assistant/
 │   └── architecture/
 │       ├── architecture.svg           # Visual architecture diagram
 │       └── design.md                  # Design decisions + trade-offs
+│
+├── tests/                             # Unit tests (pytest)
+│   ├── test_api.py                    # Health, ingestion, chat endpoint tests
+│   ├── test_agents.py                 # Orchestrator routing + intent classification tests
+│   └── test_retrieval.py              # RRF fusion, reranker, semantic cache tests
 │
 ├── requirements.txt                   # Python dependencies (root level)
 ├── runtime.txt                        # Python 3.11.9 (Render signal)
@@ -562,7 +567,7 @@ rm -rf storage/chroma storage/sqlite/app.db storage/sqlite/checkpoints.db data/l
 |---|---|---|
 | `/` | **Chat** | Main interface — type supply chain questions, see AI responses with severity badges, source citations, and live agent status |
 | `/analytics` | **Analytics** | Supply chain dashboard — late delivery by market, shipment mode breakdown, fraud signals, inventory trends. Has independent loading + refresh button |
-| `/flow` | **Flow** | Two panels: left = end-to-end pipeline DAG (nodes light up live as query runs), right = run quality metrics (score, faithfulness, retrieval stats, CRAG retries, techniques used) |
+| `/flow` | **Flow** | Two panels: left = end-to-end pipeline DAG (nodes light up live as query runs), right = run quality metrics (score, faithfulness, retrieval stats, CRAG retries, live model usage, techniques used) |
 | `/admin` | **Admin** | File browser with type badges + loaded status, ingestion controls, Kaggle MCP browser, evaluation trigger |
 | `/present` | **Presentation** | Full-screen presentation mode for panel demo — architecture slides, demo flow, tech stack overview |
 
@@ -583,8 +588,14 @@ After each query, the right panel shows:
 - **Why** box: LLM-generated reason for faithfulness pass/fail
 - **Evaluation**: faithfulness result, PII status, severity, HILT flag
 - **Retrieval**: docs retrieved, max rerank score, retrieval time, CRAG retry count
+- **🤖 Models Used**: live view of which LLM ran for each task (routing, recommendation, faithfulness) with latency — including fallback if a provider switched mid-run
 - **Techniques**: which pipeline optimizations were active this run
 - **Live Timeline**: per-node event log with timestamps
+
+### Chat page features
+
+- Follow-up questions supported — "explain more", "why?", "can you elaborate" pass through guardrails automatically
+- Timestamps (HH:MM:SS) on every message — sent time on user queries, received time on AI responses
 
 ---
 
